@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>祥和年菜訂購</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        /* 基礎樣式設計 (請自行優化佈局) */
+        .menu-item { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; display: flex; align-items: center; }
+        .menu-item img { width: 80px; height: 80px; object-fit: cover; margin-right: 15px; }
+        .menu-item-info { flex-grow: 1; }
+        .qty-input { width: 50px; }
+        #orderForm { padding: 20px; }
+        #submitBtn { padding: 10px 20px; background-color: #f44336; color: white; border: none; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div id="orderForm">
+        <h2>祥和蔬食料理 - 年菜點菜</h2>
+        
+        <div id="menu">
+            <div class="menu-item">
+                <img src="path_to_金雞鳴呈祥_image.jpg" alt="金雞鳴呈祥">
+                <div class="menu-item-info">
+                    <strong>金雞鳴呈祥</strong><br>
+                    <span style="color:#e91e63">(5-6人份)</span><br>
+                    NT$ <span class="item-price">640</span>
+                </div>
+                <input type="number" class="qty-input" min="0" value="0" data-price="640">
+            </div>
+            <div class="menu-item">
+                <img src="path_to_佛跳牆_image.jpg" alt="御品佛跳牆">
+                <div class="menu-item-info">
+                    <strong>御品佛跳牆</strong><br>
+                    <span style="color:#e91e63">(5-6人份)</span><br>
+                    NT$ <span class="item-price">1380</span>
+                </div>
+                <input type="number" class="qty-input" min="0" value="0" data-price="1380">
+            </div>
+            </div>
+
+        <h3>訂購資訊</h3>
+        <label>取貨分店：<select id="branch"><option>鎮江店</option><option>慶城店</option></select></label><br>
+        <label>取貨日期：<input type="date" id="pickupDate"></label><br>
+        <label>取貨時間：<select id="pickupTime"><option>11:30</option><option>12:00</option>...</select></label><br>
+        <label>訂購人姓名：<input type="text" id="custName"></label><br>
+        <label>訂購人電話：<input type="tel" id="custPhone"></label><br>
+        
+        <h3>合計金額：NT$ <span id="totalAmount">0</span></h3>
+        <button type="button" id="submitBtn" onclick="submitOrder()">確認訂購</button>
+    </div>
+
+    <script>
+        // 初始化 LIFF
+        liff.init({ liffId: "你的_LIFF_ID" }).then(() => {
+            if (!liff.isLoggedIn()) {
+                liff.login();
+            }
+        });
+
+        // 監聽數量選擇器變化，即時計算合計金額
+        const qtyInputs = document.querySelectorAll('.qty-input');
+        const totalAmountSpan = document.getElementById('totalAmount');
+
+        qtyInputs.forEach(input => {
+            input.addEventListener('input', calculateTotal);
+        });
+
+        function calculateTotal() {
+            let total = 0;
+            qtyInputs.forEach(input => {
+                const price = parseFloat(input.dataset.price);
+                const qty = parseInt(input.value);
+                total += price * qty;
+            });
+            totalAmountSpan.innerText = total;
+        }
+
+        function submitOrder() {
+            calculateTotal(); // 再次確保金額準確
+            const totalAmount = parseFloat(totalAmountSpan.innerText);
+            
+            if (totalAmount === 0) {
+                alert('請至少選擇一項餐點！');
+                return;
+            }
+
+            // 確保有抓到 LINE User Profile
+            liff.getProfile().then(profile => {
+                const userId = profile.userId; 
+                
+                // 收集表單資料
+                const custName = document.getElementById('custName').value;
+                const custPhone = document.getElementById('custPhone').value;
+                const branch = document.getElementById('branch').value;
+                const date = document.getElementById('pickupDate').value;
+                const time = document.getElementById('pickupTime').value;
+
+                // 收集菜色數量陣列 (請保持與 Sheet 欄位順序一致！)
+                let items_qty_array = [];
+                qtyInputs.forEach(input => {
+                    items_qty_array.push(parseInt(input.value));
+                });
+
+                const orderData = {
+                    userId: userId,
+                    name: custName,
+                    phone: custPhone,
+                    branch: branch,
+                    date: date,
+                    time: time,
+                    totalAmount: totalAmount,
+                    items_qty_array: items_qty_array
+                };
+
+                // 將資料打給 Google Apps Script 的 Web App URL
+                fetch('你的_GAS_網頁應用程式_URL', {
+                    method: 'POST',
+                    mode: 'no-cors', // 解決 GAS 跨網域問題
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(orderData)
+                })
+                .then(response => {
+                    // 由於使用 no-cors，這裡無法獲取正常的 JSON 回傳，但如果請求成功，前端可以做出對應反應
+                    alert('訂單提交中，請留意 LINE 訊息通知 (若有設定)。');
+                    liff.closeWindow(); // 關閉 LIFF 視窗回到 LINE 聊天室
+                })
+                .catch(err => console.error('提交失敗', err));
+            }).catch(err => console.error('取得Profile失敗', err));
+        }
+    </script>
+</body>
+</html>
