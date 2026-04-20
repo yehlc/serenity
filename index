@@ -53,7 +53,7 @@
 
     <script>
         // 初始化 LIFF
-        liff.init({ liffId: "你的_LIFF_ID" }).then(() => {
+        liff.init({ liffId: "2009843210-1DLZ73WP" }).then(() => {
             if (!liff.isLoggedIn()) {
                 liff.login();
             }
