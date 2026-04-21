@@ -11,7 +11,7 @@
         .header { background-color: #8b0000; color: white; text-align: center; padding: 15px; font-size: 1.2em; font-weight: bold; position: sticky; top: 0; z-index: 10; }
         .menu-container { padding: 10px; }
         .menu-item { background: white; border-radius: 10px; padding: 15px; margin-bottom: 12px; display: flex; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .menu-item.sold-out { opacity: 0.5; filter: grayscale(100%); } /* 售完的灰色濾鏡 */
+        .menu-item.sold-out { opacity: 0.5; filter: grayscale(100%); } 
         .sold-out-badge { color: #d32f2f; font-weight: bold; font-size: 0.9em; border: 1px solid #d32f2f; padding: 2px 5px; border-radius: 3px; display: inline-block; margin-top: 5px; }
         .menu-item img { width: 80px; height: 80px; border-radius: 8px; object-fit: cover; margin-right: 15px; background-color: #eee; }
         .menu-item-info { flex-grow: 1; }
@@ -70,15 +70,15 @@
             <button class="submit-btn" id="submitBtn" onclick="submitOrder()">確認送出訂單</button>
         </div>
     </div>
-    <div id="choiceModal" class="modal-overlay" style="display:none; align-items:center;">
-    <div class="modal-content" style="border-radius:15px; margin:20px; text-align:center;">
-        <h3>您已有訂購紀錄</h3>
-        <p>請問您想要？</p>
-        <button class="submit-btn" onclick="startEdit(true)">修改原訂單</button>
-        <button class="submit-btn" style="background:#666;" onclick="startEdit(false)">再開一筆新訂單</button>
-    </div>
-</div>
     
+    <div id="choiceModal" class="modal-overlay" style="align-items:center;">
+        <div class="modal-content" style="border-radius:15px; margin:20px; text-align:center;">
+            <h3>您有一筆未完成的訂單</h3>
+            <p style="margin-bottom: 20px;">請問您想要？</p>
+            <button class="submit-btn" onclick="startEdit(true)">修改原訂單</button>
+            <button class="submit-btn" style="background:#666; margin-top: 15px;" onclick="startEdit(false)">再開一筆新訂單</button>
+        </div>
+    </div>
 
     <script>
         const GAS_URL = 'https://script.google.com/macros/s/AKfycbwWPu_pZsN9EoFVYJmyUhndaj6IfO2ekHi1jnB7lJMO2I0MDemfZSNWlDkiQUIyUK8u/exec';
@@ -94,89 +94,87 @@
         ];
 
         let currentTotal = 0;
-    let quantities = new Array(menuItems.length).fill(0);
-    let inventoryData = {};
-    let lastOrderData = null; // 儲存查詢到的舊訂單
-    let currentAction = "new"; // 預設是新訂單
+        let quantities = new Array(menuItems.length).fill(0);
+        let inventoryData = {};
+        let lastOrderData = null; 
+        let currentAction = "new"; 
 
         window.onload = function() {
-            // 1. 初始化 LIFF
             liff.init({ liffId: "2009843210-1DLZ73WP" }).then(() => {
                 if (!liff.isLoggedIn()) {
-                liff.login();
-            } else {
-                checkHistoryAndLoad();
-            }
-        });
-    };
-            function checkHistoryAndLoad() {
-        const profile = liff.getDecodedIDToken();
-        const userId = profile.sub; // 取得用戶 ID
-
-        // 同時抓庫存與歷史訂單
-        fetch(`${GAS_URL}?userId=${userId}`)
-            .then(res => res.json())
-            .then(res => {
-                inventoryData = res.inventory;
-                if (res.lastOrder) {
-                    lastOrderData = res.lastOrder;
-                    if (confirm(`偵測到您已有訂單(${res.lastOrder.orderId})，要改為「修改舊訂單」嗎？\n(按取消則建立新訂單)`)) {
-                        applyHistoryToMenu();
-                    }
+                    liff.login();
+                } else {
+                    checkHistoryAndLoad();
                 }
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('menuList').style.display = 'block';
-                renderMenu();
-                calculateTotal();
-            });
-    }
+            }).catch(err => console.error("LIFF Error:", err));
+        };
+
+        function checkHistoryAndLoad() {
+            const profile = liff.getDecodedIDToken();
+            const userId = profile.sub; 
+
+            fetch(`${GAS_URL}?userId=${userId}`)
+                .then(res => res.json())
+                .then(res => {
+                    inventoryData = res.inventory;
+                    
+                    if (res.lastOrder) {
+                        lastOrderData = res.lastOrder;
+                        
+                        // 【時效性防呆】計算取貨日是否小於等於 3 天
+                        let pickupDate = new Date(lastOrderData.date);
+                        let today = new Date();
+                        let diffDays = Math.ceil((pickupDate - today) / (1000 * 60 * 60 * 24));
+                        
+                        if (diffDays <= 3) {
+                            alert("您有一筆近期的訂單（3天內取貨），已進入準備階段無法線上修改。如需更改請致電門市。您仍可繼續建立一筆新訂單。");
+                            startEdit(false); // 強制進入新訂單模式
+                        } else {
+                            // 顯示修改選擇彈窗
+                            document.getElementById('choiceModal').style.display = 'flex';
+                        }
+                    } else {
+                        startEdit(false);
+                    }
+                });
+        }
+
+        // 選擇修改或新增後的流程
+        function startEdit(isEdit) {
+            document.getElementById('choiceModal').style.display = 'none';
+            if (isEdit) {
+                applyHistoryToMenu();
+            } else {
+                currentAction = "new";
+            }
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('menuList').style.display = 'block';
+            renderMenu(); // 根據 quantities 渲染畫面
+            calculateTotal();
+        }
+
         function applyHistoryToMenu() {
-        currentAction = "update";
-        // 將歷史數量填回 quantities 陣列 (注意要跳過 X 欄的位移)
-        let historyQty = lastOrderData.items; 
-        let part1 = historyQty.slice(0, 16);
-        let part2 = historyQty.slice(17, 22); // 跳過中間的空欄
-        quantities = part1.concat(part2).map(v => parseInt(v) || 0);
-        
-        // 自動填入姓名電話
-        document.getElementById('custName').value = lastOrderData.name;
-        document.getElementById('custPhone').value = lastOrderData.phone;
-    }
-
-    // submitOrder 增加 action 參數
-    function submitOrder() {
-        // ... (姓名電話驗證)
-        liff.getProfile().then(profile => {
-            const orderData = {
-                userId: profile.userId,
-                action: currentAction, // "new" 或 "update"
-                orderId: currentAction === "update" ? lastOrderData.orderId : null,
-                name: document.getElementById('custName').value,
-                phone: document.getElementById('custPhone').value,
-                date: document.getElementById('pickupDate').value,
-                totalAmount: currentTotal,
-                items_qty_array: quantities
-            };
-
-            fetch(GAS_URL, {
-                method: 'POST',
-                mode: 'no-cors',
-                body: JSON.stringify(orderData)
-            }).then(() => {
-                alert(currentAction === "update" ? '訂單已成功修改！' : '訂單已成功送出！');
-                liff.closeWindow();
-            });
-        });
-    }
+            currentAction = "update";
+            
+            // 組合出 21 項陣列並過濾掉 X 欄 (index 16)
+            let historyQty = lastOrderData.items; 
+            let part1 = historyQty.slice(0, 16);
+            let part2 = historyQty.slice(17, 22); 
+            quantities = part1.concat(part2).map(v => parseInt(v) || 0);
+            
+            document.getElementById('custName').value = lastOrderData.name;
+            document.getElementById('custPhone').value = lastOrderData.phone;
+            document.getElementById('pickupDate').value = lastOrderData.date;
+        }
 
         function renderMenu() {
             const container = document.getElementById('menuList');
             container.innerHTML = '';
             
             menuItems.forEach((item, index) => {
-                // 判斷庫存
                 let stock = inventoryData[item.name] !== undefined ? parseInt(inventoryData[item.name]) : 999;
                 let isSoldOut = stock <= 0;
+                let currentQty = quantities[index] || 0; // 讀取目前數值 (讓歷史訂單能顯示出來)
 
                 const div = document.createElement('div');
                 div.className = 'menu-item' + (isSoldOut ? ' sold-out' : '');
@@ -185,7 +183,7 @@
                     ? `<div class="sold-out-badge">已售完</div>` 
                     : `<div class="qty-controls">
                         <button class="qty-btn" onclick="updateQty(${index}, -1)">-</button>
-                        <input type="number" class="qty-input" id="qty-${index}" value="0" readonly>
+                        <input type="number" class="qty-input" id="qty-${index}" value="${currentQty}" readonly>
                         <button class="qty-btn" onclick="updateQty(${index}, 1)">+</button>
                        </div>`;
 
@@ -201,7 +199,6 @@
             });
         }
 
-        // --- 下方的 updateQty, calculateTotal, openCart, closeCart, submitOrder 函數皆維持與上次完全相同，請直接貼上 ---
         function updateQty(index, change) {
             let newQty = quantities[index] + change;
             if (newQty < 0) newQty = 0; 
@@ -237,10 +234,16 @@
 
             liff.getProfile().then(profile => {
                 const orderData = {
-                    userId: profile.userId, name: custName, phone: custPhone,
-                    branch: document.getElementById('branch').value, date: date,
+                    userId: profile.userId,
+                    action: currentAction, // "new" 或 "update"
+                    orderId: currentAction === "update" ? lastOrderData.orderId : null,
+                    name: custName,
+                    phone: custPhone,
+                    branch: document.getElementById('branch').value,
+                    date: date,
                     time: document.getElementById('pickupTime').value,
-                    totalAmount: currentTotal, items_qty_array: quantities 
+                    totalAmount: currentTotal,
+                    items_qty_array: quantities 
                 };
 
                 fetch(GAS_URL, {
@@ -248,7 +251,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(orderData)
                 }).then(() => {
-                    alert('訂單已送出！請留意官方帳號訊息。');
+                    alert(currentAction === "update" ? '訂單已成功修改！請留意官方帳號訊息。' : '訂單已成功送出！請留意官方帳號訊息。');
                     liff.closeWindow();
                 }).catch(err => {
                     alert('送出失敗，請稍後再試。');
