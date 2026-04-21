@@ -1,133 +1,234 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>祥和年菜訂購</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>祥和年菜預購</title>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
-        /* 基礎樣式設計 (請自行優化佈局) */
-        .menu-item { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; display: flex; align-items: center; }
-        .menu-item img { width: 80px; height: 80px; object-fit: cover; margin-right: 15px; }
+        /* --- 現代化 UI 樣式設計 --- */
+        body { font-family: 'Helvetica Neue', Helvetica, Arial, '微軟正黑體', sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; padding-bottom: 80px; }
+        .header { background-color: #8b0000; color: white; text-align: center; padding: 15px; font-size: 1.2em; font-weight: bold; position: sticky; top: 0; z-index: 10; }
+        .menu-container { padding: 10px; }
+        .menu-item { background: white; border-radius: 10px; padding: 15px; margin-bottom: 12px; display: flex; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .menu-item img { width: 80px; height: 80px; border-radius: 8px; object-fit: cover; margin-right: 15px; background-color: #eee; }
         .menu-item-info { flex-grow: 1; }
-        .qty-input { width: 50px; }
-        #orderForm { padding: 20px; }
-        #submitBtn { padding: 10px 20px; background-color: #f44336; color: white; border: none; cursor: pointer; }
+        .menu-item-title { font-size: 1.1em; font-weight: bold; color: #333; margin-bottom: 5px; }
+        .menu-item-price { color: #e91e63; font-weight: bold; font-size: 1.1em; }
+        .qty-controls { display: flex; align-items: center; }
+        .qty-btn { width: 30px; height: 30px; border: 1px solid #ccc; background: white; border-radius: 5px; font-size: 1.2em; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .qty-input { width: 40px; text-align: center; border: none; font-size: 1.1em; font-weight: bold; margin: 0 5px; background: transparent; }
+        
+        /* 底部購物車按鈕 (懸浮) */
+        .cart-bar { position: fixed; bottom: 0; left: 0; width: 100%; background-color: #333; color: white; display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; box-sizing: border-box; cursor: pointer; z-index: 20; transition: transform 0.3s ease; }
+        .cart-bar.disabled { background-color: #999; cursor: not-allowed; }
+        .cart-total-text { font-size: 1.2em; font-weight: bold; }
+        .cart-btn-text { background-color: #e91e63; padding: 8px 15px; border-radius: 20px; font-weight: bold; }
+
+        /* 訂購資料填寫 Modal (彈出視窗) */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 30; justify-content: center; align-items: flex-end; }
+        .modal-content { background: white; width: 100%; max-height: 85vh; border-radius: 20px 20px 0 0; padding: 25px 20px; box-sizing: border-box; overflow-y: auto; animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .modal-header h3 { margin: 0; font-size: 1.3em; }
+        .close-btn { font-size: 1.5em; color: #999; cursor: pointer; border: none; background: none; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-weight: bold; margin-bottom: 5px; color: #555; }
+        .form-group input, .form-group select { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 1em; }
+        .submit-btn { width: 100%; padding: 15px; background-color: #8b0000; color: white; border: none; border-radius: 8px; font-size: 1.2em; font-weight: bold; margin-top: 10px; cursor: pointer; }
     </style>
 </head>
 <body>
-    <div id="orderForm">
-        <h2>祥和蔬食料理 - 年菜點菜</h2>
-        
-        <div id="menu">
-            <div class="menu-item">
-                <img src="path_to_金雞鳴呈祥_image.jpg" alt="金雞鳴呈祥">
-                <div class="menu-item-info">
-                    <strong>金雞鳴呈祥</strong><br>
-                    <span style="color:#e91e63">(5-6人份)</span><br>
-                    NT$ <span class="item-price">640</span>
-                </div>
-                <input type="number" class="qty-input" min="0" value="0" data-price="640">
+
+    <div class="header">祥和蔬食料理 - 年菜預購</div>
+    
+    <div class="menu-container" id="menuList"></div>
+
+    <div class="cart-bar disabled" id="cartBar" onclick="openCart()">
+        <span class="cart-total-text" id="cartTotal">合計: NT$ 0</span>
+        <span class="cart-btn-text">填寫訂單 ➔</span>
+    </div>
+
+    <div class="modal-overlay" id="orderModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>填寫訂購資訊</h3>
+                <button class="close-btn" onclick="closeCart()">×</button>
             </div>
-            <div class="menu-item">
-                <img src="path_to_佛跳牆_image.jpg" alt="御品佛跳牆">
-                <div class="menu-item-info">
-                    <strong>御品佛跳牆</strong><br>
-                    <span style="color:#e91e63">(5-6人份)</span><br>
-                    NT$ <span class="item-price">1380</span>
-                </div>
-                <input type="number" class="qty-input" min="0" value="0" data-price="1380">
+            
+            <div class="form-group">
+                <label>取貨分店</label>
+                <select id="branch"><option value="鎮江店">鎮江店</option><option value="慶城店">慶城店</option></select>
             </div>
+            <div class="form-group">
+                <label>取貨日期</label>
+                <input type="date" id="pickupDate" required>
+            </div>
+            <div class="form-group">
+                <label>取貨時間</label>
+                <select id="pickupTime">
+                    <option value="11:30">11:30</option>
+                    <option value="12:00">12:00</option>
+                    <option value="12:30">12:30</option>
+                    <option value="17:30">17:30</option>
+                    <option value="18:00">18:00</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>訂購人姓名</label>
+                <input type="text" id="custName" placeholder="請填寫真實姓名" required>
+            </div>
+            <div class="form-group">
+                <label>連絡電話</label>
+                <input type="tel" id="custPhone" placeholder="例如: 0912345678" required>
             </div>
 
-        <h3>訂購資訊</h3>
-        <label>取貨分店：<select id="branch"><option>鎮江店</option><option>慶城店</option></select></label><br>
-        <label>取貨日期：<input type="date" id="pickupDate"></label><br>
-        <label>取貨時間：<select id="pickupTime"><option>11:30</option><option>12:00</option>...</select></label><br>
-        <label>訂購人姓名：<input type="text" id="custName"></label><br>
-        <label>訂購人電話：<input type="tel" id="custPhone"></label><br>
-        
-        <h3>合計金額：NT$ <span id="totalAmount">0</span></h3>
-        <button type="button" id="submitBtn" onclick="submitOrder()">確認訂購</button>
+            <button class="submit-btn" id="submitBtn" onclick="submitOrder()">確認送出訂單</button>
+        </div>
     </div>
 
     <script>
-        // 初始化 LIFF
-        liff.init({ liffId: "2009843210-1DLZ73WP" }).then(() => {
-            if (!liff.isLoggedIn()) {
-                liff.login();
-            }
-        });
+        // ⚠️ 嚴格對應 Google Sheet 由左至右的欄位順序 (共20項)
+        const menuItems = [
+            { name: "祥和拼盤", price: 800 },
+            { name: "佛跳牆", price: 1380 },
+            { name: "肉骨茶鍋", price: 1380 },
+            { name: "酸白菜鍋", price: 860 },
+            { name: "麻油鍋", price: 860 },
+            { name: "紅燒獅子頭", price: 640 },
+            { name: "清蒸臭豆腐", price: 640 },
+            { name: "麻辣臭豆腐", price: 600 },
+            { name: "三杯猴頭菇", price: 760 },
+            { name: "宮保素雞丁", price: 600 },
+            { name: "糖醋素肉", price: 600 },
+            { name: "素杏鮑牛腩煲", price: 720 },
+            { name: "酸白菜素牛肉", price: 560 },
+            { name: "蓉城口水雞", price: 760 },
+            { name: "祥和素油雞", price: 640 },
+            { name: "松露油飯", price: 380 },
+            { name: "椒麻油飯", price: 300 },
+            { name: "炒炊粉", price: 180 },
+            { name: "原味蘿蔔糕", price: 200 },
+            { name: "酥香蘿蔔糕", price: 280 }
+        ];
 
-        // 監聽數量選擇器變化，即時計算合計金額
-        const qtyInputs = document.querySelectorAll('.qty-input');
-        const totalAmountSpan = document.getElementById('totalAmount');
+        let currentTotal = 0;
+        let quantities = new Array(menuItems.length).fill(0);
 
-        qtyInputs.forEach(input => {
-            input.addEventListener('input', calculateTotal);
-        });
+        // 初始化網頁與 LIFF
+        window.onload = function() {
+            renderMenu();
+            liff.init({ liffId: "2009843210-1DLZ73WP" }).then(() => {
+                if (!liff.isLoggedIn()) liff.login();
+            }).catch(err => console.error("LIFF Init Error:", err));
+        };
 
-        function calculateTotal() {
-            let total = 0;
-            qtyInputs.forEach(input => {
-                const price = parseFloat(input.dataset.price);
-                const qty = parseInt(input.value);
-                total += price * qty;
+        // 動態生成菜單列表
+        function renderMenu() {
+            const container = document.getElementById('menuList');
+            container.innerHTML = '';
+            
+            menuItems.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'menu-item';
+                // 圖片路徑若有真實網址可替換，此處先用佔位圖
+                div.innerHTML = `
+                    <img src="https://via.placeholder.com/80?text=圖片" alt="${item.name}">
+                    <div class="menu-item-info">
+                        <div class="menu-item-title">${item.name}</div>
+                        <div class="menu-item-price">NT$ ${item.price}</div>
+                    </div>
+                    <div class="qty-controls">
+                        <button class="qty-btn" onclick="updateQty(${index}, -1)">-</button>
+                        <input type="number" class="qty-input" id="qty-${index}" value="0" readonly>
+                        <button class="qty-btn" onclick="updateQty(${index}, 1)">+</button>
+                    </div>
+                `;
+                container.appendChild(div);
             });
-            totalAmountSpan.innerText = total;
         }
 
-        function submitOrder() {
-            calculateTotal(); // 再次確保金額準確
-            const totalAmount = parseFloat(totalAmountSpan.innerText);
+        // 更新數量與計算總額
+        function updateQty(index, change) {
+            let newQty = quantities[index] + change;
+            if (newQty < 0) newQty = 0; // 不允許負數
             
-            if (totalAmount === 0) {
-                alert('請至少選擇一項餐點！');
+            quantities[index] = newQty;
+            document.getElementById(`qty-${index}`).value = newQty;
+            
+            calculateTotal();
+        }
+
+        function calculateTotal() {
+            currentTotal = menuItems.reduce((sum, item, index) => sum + (item.price * quantities[index]), 0);
+            const cartBar = document.getElementById('cartBar');
+            document.getElementById('cartTotal').innerText = `合計: NT$ ${currentTotal}`;
+            
+            if (currentTotal > 0) {
+                cartBar.classList.remove('disabled');
+            } else {
+                cartBar.classList.add('disabled');
+            }
+        }
+
+        // 開關購物車/填寫資料 Modal
+        function openCart() {
+            if (currentTotal > 0) {
+                document.getElementById('orderModal').style.display = 'flex';
+            } else {
+                alert("購物車是空的，請先選擇餐點唷！");
+            }
+        }
+
+        function closeCart() {
+            document.getElementById('orderModal').style.display = 'none';
+        }
+
+        // 送出訂單至 GAS
+        function submitOrder() {
+            const custName = document.getElementById('custName').value.trim();
+            const custPhone = document.getElementById('custPhone').value.trim();
+            const date = document.getElementById('pickupDate').value;
+            
+            if (!custName || !custPhone || !date) {
+                alert("請填寫完整的姓名、電話與取貨日期！");
                 return;
             }
 
-            // 確保有抓到 LINE User Profile
+            document.getElementById('submitBtn').innerText = "訂單傳送中...";
+            document.getElementById('submitBtn').disabled = true;
+
             liff.getProfile().then(profile => {
-                const userId = profile.userId; 
-                
-                // 收集表單資料
-                const custName = document.getElementById('custName').value;
-                const custPhone = document.getElementById('custPhone').value;
-                const branch = document.getElementById('branch').value;
-                const date = document.getElementById('pickupDate').value;
-                const time = document.getElementById('pickupTime').value;
-
-                // 收集菜色數量陣列 (請保持與 Sheet 欄位順序一致！)
-                let items_qty_array = [];
-                qtyInputs.forEach(input => {
-                    items_qty_array.push(parseInt(input.value));
-                });
-
                 const orderData = {
-                    userId: userId,
+                    userId: profile.userId,
                     name: custName,
                     phone: custPhone,
-                    branch: branch,
+                    branch: document.getElementById('branch').value,
                     date: date,
-                    time: time,
-                    totalAmount: totalAmount,
-                    items_qty_array: items_qty_array
+                    time: document.getElementById('pickupTime').value,
+                    totalAmount: currentTotal,
+                    items_qty_array: quantities // 這裡送出的陣列就是100%對齊您要求的20個品項
                 };
 
-                // 將資料打給 Google Apps Script 的 Web App URL
                 fetch('https://script.google.com/macros/s/AKfycbwWPu_pZsN9EoFVYJmyUhndaj6IfO2ekHi1jnB7lJMO2I0MDemfZSNWlDkiQUIyUK8u/exec', {
                     method: 'POST',
-                    mode: 'no-cors', // 解決 GAS 跨網域問題
+                    mode: 'no-cors',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(orderData)
                 })
-                .then(response => {
-                    // 由於使用 no-cors，這裡無法獲取正常的 JSON 回傳，但如果請求成功，前端可以做出對應反應
-                    alert('訂單提交中，請留意 LINE 訊息通知 (若有設定)。');
-                    liff.closeWindow(); // 關閉 LIFF 視窗回到 LINE 聊天室
+                .then(() => {
+                    alert('訂單已送出！請留意官方帳號訊息。');
+                    liff.closeWindow();
                 })
-                .catch(err => console.error('提交失敗', err));
-            }).catch(err => console.error('取得Profile失敗', err));
+                .catch(err => {
+                    alert('送出失敗，請稍後再試。');
+                    console.error(err);
+                    document.getElementById('submitBtn').innerText = "確認送出訂單";
+                    document.getElementById('submitBtn').disabled = false;
+                });
+            }).catch(err => {
+                alert("無法取得 LINE 授權，請確認您已同意授權。");
+            });
         }
     </script>
 </body>
