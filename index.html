@@ -6,11 +6,13 @@
     <title>祥和年菜預購</title>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
-        /* 樣式與上次相同，保持不變 */
+        /* 樣式保持不變 */
         body { font-family: 'Helvetica Neue', Helvetica, Arial, '微軟正黑體', sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; padding-bottom: 80px; }
         .header { background-color: #8b0000; color: white; text-align: center; padding: 15px; font-size: 1.2em; font-weight: bold; position: sticky; top: 0; z-index: 10; }
         .menu-container { padding: 10px; }
         .menu-item { background: white; border-radius: 10px; padding: 15px; margin-bottom: 12px; display: flex; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .menu-item.sold-out { opacity: 0.5; filter: grayscale(100%); } /* 售完的灰色濾鏡 */
+        .sold-out-badge { color: #d32f2f; font-weight: bold; font-size: 0.9em; border: 1px solid #d32f2f; padding: 2px 5px; border-radius: 3px; display: inline-block; margin-top: 5px; }
         .menu-item img { width: 80px; height: 80px; border-radius: 8px; object-fit: cover; margin-right: 15px; background-color: #eee; }
         .menu-item-info { flex-grow: 1; }
         .menu-item-title { font-size: 1.1em; font-weight: bold; color: #333; margin-bottom: 5px; }
@@ -34,13 +36,16 @@
         .form-group label { display: block; font-weight: bold; margin-bottom: 5px; color: #555; }
         .form-group input, .form-group select { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 1em; }
         .submit-btn { width: 100%; padding: 15px; background-color: #8b0000; color: white; border: none; border-radius: 8px; font-size: 1.2em; font-weight: bold; margin-top: 10px; cursor: pointer; }
+        
+        #loading { text-align: center; padding: 30px; color: #666; font-weight: bold; }
     </style>
 </head>
 <body>
 
     <div class="header">祥和蔬食料理 - 年菜預購</div>
     
-    <div class="menu-container" id="menuList"></div>
+    <div id="loading">載入最新菜單與庫存中...</div>
+    <div class="menu-container" id="menuList" style="display:none;"></div>
 
     <div class="cart-bar disabled" id="cartBar" onclick="openCart()">
         <span class="cart-total-text" id="cartTotal">合計: NT$ 0</span>
@@ -54,71 +59,54 @@
                 <button class="close-btn" onclick="closeCart()">×</button>
             </div>
             
-            <div class="form-group">
-                <label>取貨分店</label>
-                <select id="branch"><option value="鎮江店">鎮江店</option><option value="慶城店">慶城店</option></select>
+            <div class="form-group"><label>取貨分店</label><select id="branch"><option value="鎮江店">鎮江店</option><option value="慶城店">慶城店</option></select></div>
+            <div class="form-group"><label>取貨日期</label><input type="date" id="pickupDate" required></div>
+            <div class="form-group"><label>取貨時間</label>
+                <select id="pickupTime"><option value="11:30">11:30</option><option value="12:00">12:00</option><option value="12:30">12:30</option><option value="17:30">17:30</option><option value="18:00">18:00</option></select>
             </div>
-            <div class="form-group">
-                <label>取貨日期</label>
-                <input type="date" id="pickupDate" required>
-            </div>
-            <div class="form-group">
-                <label>取貨時間</label>
-                <select id="pickupTime">
-                    <option value="11:30">11:30</option>
-                    <option value="12:00">12:00</option>
-                    <option value="12:30">12:30</option>
-                    <option value="17:30">17:30</option>
-                    <option value="18:00">18:00</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>訂購人姓名</label>
-                <input type="text" id="custName" placeholder="請填寫真實姓名" required>
-            </div>
-            <div class="form-group">
-                <label>連絡電話</label>
-                <input type="tel" id="custPhone" placeholder="例如: 0912345678" required>
-            </div>
+            <div class="form-group"><label>訂購人姓名</label><input type="text" id="custName" placeholder="請填寫真實姓名" required></div>
+            <div class="form-group"><label>連絡電話</label><input type="tel" id="custPhone" placeholder="例如: 0912345678" required></div>
 
             <button class="submit-btn" id="submitBtn" onclick="submitOrder()">確認送出訂單</button>
         </div>
     </div>
 
     <script>
-        // 【完整更新】對應表單由左至右 21 道菜
+        const GAS_URL = 'https://script.google.com/macros/s/AKfycbwWPu_pZsN9EoFVYJmyUhndaj6IfO2ekHi1jnB7lJMO2I0MDemfZSNWlDkiQUIyUK8u/exec';
+
         const menuItems = [
-            { name: "祥和拼盤", price: 800 },
-            { name: "佛跳牆", price: 1380 },
-            { name: "肉骨茶鍋", price: 1380 },
-            { name: "酸白菜鍋", price: 860 },
-            { name: "麻油鍋", price: 860 },
-            { name: "紅燒獅子頭", price: 640 },
-            { name: "清蒸臭豆腐", price: 640 },
-            { name: "麻辣臭豆腐", price: 600 },
-            { name: "三杯猴頭菇", price: 760 },
-            { name: "宮保素雞丁", price: 600 },
-            { name: "糖醋素肉", price: 600 },
-            { name: "素杏鮑牛腩煲", price: 720 },
-            { name: "酸白菜素牛肉", price: 560 },
-            { name: "麻油素腰花", price: 760 },  // 補上漏掉的這一項
-            { name: "蓉城口水雞", price: 760 },
-            { name: "祥和素油雞", price: 640 },
-            { name: "松露油飯", price: 380 },
-            { name: "椒麻油飯", price: 300 },
-            { name: "炒炊粉", price: 180 },
-            { name: "原味蘿蔔糕", price: 200 },
-            { name: "酥香蘿蔔糕", price: 280 }
+            { name: "祥和拼盤", price: 800 }, { name: "佛跳牆", price: 1380 }, { name: "肉骨茶鍋", price: 1380 },
+            { name: "酸白菜鍋", price: 860 }, { name: "麻油鍋", price: 860 }, { name: "紅燒獅子頭", price: 640 },
+            { name: "清蒸臭豆腐", price: 640 }, { name: "麻辣臭豆腐", price: 600 }, { name: "三杯猴頭菇", price: 760 },
+            { name: "宮保素雞丁", price: 600 }, { name: "糖醋素肉", price: 600 }, { name: "素杏鮑牛腩煲", price: 720 },
+            { name: "酸白菜素牛肉", price: 560 }, { name: "麻油素腰花", price: 760 }, { name: "蓉城口水雞", price: 760 },
+            { name: "祥和素油雞", price: 640 }, { name: "松露油飯", price: 380 }, { name: "椒麻油飯", price: 300 },
+            { name: "炒炊粉", price: 180 }, { name: "原味蘿蔔糕", price: 200 }, { name: "酥香蘿蔔糕", price: 280 }
         ];
 
         let currentTotal = 0;
         let quantities = new Array(menuItems.length).fill(0);
+        let inventoryData = {}; // 儲存從 GAS 抓回來的庫存
 
         window.onload = function() {
-            renderMenu();
+            // 1. 初始化 LIFF
             liff.init({ liffId: "2009843210-1DLZ73WP" }).then(() => {
                 if (!liff.isLoggedIn()) liff.login();
-            }).catch(err => console.error("LIFF Init Error:", err));
+            }).catch(err => console.error("LIFF Error:", err));
+
+            // 2. 抓取庫存資料
+            fetch(GAS_URL)
+                .then(response => response.json())
+                .then(data => {
+                    inventoryData = data;
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('menuList').style.display = 'block';
+                    renderMenu(); // 抓完庫存後再渲染選單
+                })
+                .catch(err => {
+                    console.error("讀取庫存失敗", err);
+                    document.getElementById('loading').innerText = "讀取菜單失敗，請重新整理";
+                });
         };
 
         function renderMenu() {
@@ -126,28 +114,37 @@
             container.innerHTML = '';
             
             menuItems.forEach((item, index) => {
+                // 判斷庫存
+                let stock = inventoryData[item.name] !== undefined ? parseInt(inventoryData[item.name]) : 999;
+                let isSoldOut = stock <= 0;
+
                 const div = document.createElement('div');
-                div.className = 'menu-item';
+                div.className = 'menu-item' + (isSoldOut ? ' sold-out' : '');
+                
+                let controlsHtml = isSoldOut 
+                    ? `<div class="sold-out-badge">已售完</div>` 
+                    : `<div class="qty-controls">
+                        <button class="qty-btn" onclick="updateQty(${index}, -1)">-</button>
+                        <input type="number" class="qty-input" id="qty-${index}" value="0" readonly>
+                        <button class="qty-btn" onclick="updateQty(${index}, 1)">+</button>
+                       </div>`;
+
                 div.innerHTML = `
                     <img src="https://via.placeholder.com/80?text=圖片" alt="${item.name}">
                     <div class="menu-item-info">
                         <div class="menu-item-title">${item.name}</div>
                         <div class="menu-item-price">NT$ ${item.price}</div>
                     </div>
-                    <div class="qty-controls">
-                        <button class="qty-btn" onclick="updateQty(${index}, -1)">-</button>
-                        <input type="number" class="qty-input" id="qty-${index}" value="0" readonly>
-                        <button class="qty-btn" onclick="updateQty(${index}, 1)">+</button>
-                    </div>
+                    ${controlsHtml}
                 `;
                 container.appendChild(div);
             });
         }
 
+        // --- 下方的 updateQty, calculateTotal, openCart, closeCart, submitOrder 函數皆維持與上次完全相同，請直接貼上 ---
         function updateQty(index, change) {
             let newQty = quantities[index] + change;
             if (newQty < 0) newQty = 0; 
-            
             quantities[index] = newQty;
             document.getElementById(`qty-${index}`).value = newQty;
             calculateTotal();
@@ -157,71 +154,48 @@
             currentTotal = menuItems.reduce((sum, item, index) => sum + (item.price * quantities[index]), 0);
             const cartBar = document.getElementById('cartBar');
             document.getElementById('cartTotal').innerText = `合計: NT$ ${currentTotal}`;
-            
-            if (currentTotal > 0) {
-                cartBar.classList.remove('disabled');
-            } else {
-                cartBar.classList.add('disabled');
-            }
+            if (currentTotal > 0) { cartBar.classList.remove('disabled'); } 
+            else { cartBar.classList.add('disabled'); }
         }
 
         function openCart() {
-            if (currentTotal > 0) {
-                document.getElementById('orderModal').style.display = 'flex';
-            } else {
-                alert("購物車是空的，請先選擇餐點唷！");
-            }
+            if (currentTotal > 0) { document.getElementById('orderModal').style.display = 'flex'; } 
+            else { alert("購物車是空的，請先選擇餐點唷！"); }
         }
 
-        function closeCart() {
-            document.getElementById('orderModal').style.display = 'none';
-        }
+        function closeCart() { document.getElementById('orderModal').style.display = 'none'; }
 
         function submitOrder() {
             const custName = document.getElementById('custName').value.trim();
             const custPhone = document.getElementById('custPhone').value.trim();
             const date = document.getElementById('pickupDate').value;
             
-            if (!custName || !custPhone || !date) {
-                alert("請填寫完整的姓名、電話與取貨日期！");
-                return;
-            }
+            if (!custName || !custPhone || !date) { alert("請填寫完整的姓名、電話與取貨日期！"); return; }
 
             document.getElementById('submitBtn').innerText = "訂單傳送中...";
             document.getElementById('submitBtn').disabled = true;
 
             liff.getProfile().then(profile => {
                 const orderData = {
-                    userId: profile.userId,
-                    name: custName,
-                    phone: custPhone,
-                    branch: document.getElementById('branch').value,
-                    date: date,
+                    userId: profile.userId, name: custName, phone: custPhone,
+                    branch: document.getElementById('branch').value, date: date,
                     time: document.getElementById('pickupTime').value,
-                    totalAmount: currentTotal,
-                    items_qty_array: quantities 
+                    totalAmount: currentTotal, items_qty_array: quantities 
                 };
 
-                // 請確認這個 GAS 網址是你「重新建立新版本」後的網址！
-                fetch('https://script.google.com/macros/s/AKfycbwWPu_pZsN9EoFVYJmyUhndaj6IfO2ekHi1jnB7lJMO2I0MDemfZSNWlDkiQUIyUK8u/exec', {
-                    method: 'POST',
-                    mode: 'no-cors',
+                fetch(GAS_URL, {
+                    method: 'POST', mode: 'no-cors',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(orderData)
-                })
-                .then(() => {
+                }).then(() => {
                     alert('訂單已送出！請留意官方帳號訊息。');
                     liff.closeWindow();
-                })
-                .catch(err => {
+                }).catch(err => {
                     alert('送出失敗，請稍後再試。');
-                    console.error(err);
                     document.getElementById('submitBtn').innerText = "確認送出訂單";
                     document.getElementById('submitBtn').disabled = false;
                 });
-            }).catch(err => {
-                alert("無法取得 LINE 授權，請確認您已同意授權。");
-            });
+            }).catch(err => alert("無法取得 LINE 授權。"));
         }
     </script>
 </body>
