@@ -6,7 +6,7 @@
     <title>祥和年菜預購</title>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
-        /* --- 現代化 UI 樣式設計 --- */
+        /* 樣式與上次相同，保持不變 */
         body { font-family: 'Helvetica Neue', Helvetica, Arial, '微軟正黑體', sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; padding-bottom: 80px; }
         .header { background-color: #8b0000; color: white; text-align: center; padding: 15px; font-size: 1.2em; font-weight: bold; position: sticky; top: 0; z-index: 10; }
         .menu-container { padding: 10px; }
@@ -19,13 +19,11 @@
         .qty-btn { width: 30px; height: 30px; border: 1px solid #ccc; background: white; border-radius: 5px; font-size: 1.2em; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .qty-input { width: 40px; text-align: center; border: none; font-size: 1.1em; font-weight: bold; margin: 0 5px; background: transparent; }
         
-        /* 底部購物車按鈕 (懸浮) */
         .cart-bar { position: fixed; bottom: 0; left: 0; width: 100%; background-color: #333; color: white; display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; box-sizing: border-box; cursor: pointer; z-index: 20; transition: transform 0.3s ease; }
         .cart-bar.disabled { background-color: #999; cursor: not-allowed; }
         .cart-total-text { font-size: 1.2em; font-weight: bold; }
         .cart-btn-text { background-color: #e91e63; padding: 8px 15px; border-radius: 20px; font-weight: bold; }
 
-        /* 訂購資料填寫 Modal (彈出視窗) */
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 30; justify-content: center; align-items: flex-end; }
         .modal-content { background: white; width: 100%; max-height: 85vh; border-radius: 20px 20px 0 0; padding: 25px 20px; box-sizing: border-box; overflow-y: auto; animation: slideUp 0.3s ease-out; }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -88,7 +86,7 @@
     </div>
 
     <script>
-        // ⚠️ 嚴格對應 Google Sheet 由左至右的欄位順序 (共20項)
+        // 【完整更新】對應表單由左至右 21 道菜
         const menuItems = [
             { name: "祥和拼盤", price: 800 },
             { name: "佛跳牆", price: 1380 },
@@ -103,6 +101,7 @@
             { name: "糖醋素肉", price: 600 },
             { name: "素杏鮑牛腩煲", price: 720 },
             { name: "酸白菜素牛肉", price: 560 },
+            { name: "麻油素腰花", price: 760 },  // 補上漏掉的這一項
             { name: "蓉城口水雞", price: 760 },
             { name: "祥和素油雞", price: 640 },
             { name: "松露油飯", price: 380 },
@@ -115,7 +114,6 @@
         let currentTotal = 0;
         let quantities = new Array(menuItems.length).fill(0);
 
-        // 初始化網頁與 LIFF
         window.onload = function() {
             renderMenu();
             liff.init({ liffId: "2009843210-1DLZ73WP" }).then(() => {
@@ -123,7 +121,6 @@
             }).catch(err => console.error("LIFF Init Error:", err));
         };
 
-        // 動態生成菜單列表
         function renderMenu() {
             const container = document.getElementById('menuList');
             container.innerHTML = '';
@@ -131,7 +128,6 @@
             menuItems.forEach((item, index) => {
                 const div = document.createElement('div');
                 div.className = 'menu-item';
-                // 圖片路徑若有真實網址可替換，此處先用佔位圖
                 div.innerHTML = `
                     <img src="https://via.placeholder.com/80?text=圖片" alt="${item.name}">
                     <div class="menu-item-info">
@@ -148,14 +144,12 @@
             });
         }
 
-        // 更新數量與計算總額
         function updateQty(index, change) {
             let newQty = quantities[index] + change;
-            if (newQty < 0) newQty = 0; // 不允許負數
+            if (newQty < 0) newQty = 0; 
             
             quantities[index] = newQty;
             document.getElementById(`qty-${index}`).value = newQty;
-            
             calculateTotal();
         }
 
@@ -171,7 +165,6 @@
             }
         }
 
-        // 開關購物車/填寫資料 Modal
         function openCart() {
             if (currentTotal > 0) {
                 document.getElementById('orderModal').style.display = 'flex';
@@ -184,7 +177,6 @@
             document.getElementById('orderModal').style.display = 'none';
         }
 
-        // 送出訂單至 GAS
         function submitOrder() {
             const custName = document.getElementById('custName').value.trim();
             const custPhone = document.getElementById('custPhone').value.trim();
@@ -207,9 +199,10 @@
                     date: date,
                     time: document.getElementById('pickupTime').value,
                     totalAmount: currentTotal,
-                    items_qty_array: quantities // 這裡送出的陣列就是100%對齊您要求的20個品項
+                    items_qty_array: quantities 
                 };
 
+                // 請確認這個 GAS 網址是你「重新建立新版本」後的網址！
                 fetch('https://script.google.com/macros/s/AKfycbwWPu_pZsN9EoFVYJmyUhndaj6IfO2ekHi1jnB7lJMO2I0MDemfZSNWlDkiQUIyUK8u/exec', {
                     method: 'POST',
                     mode: 'no-cors',
