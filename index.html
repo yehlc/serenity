@@ -506,8 +506,10 @@
         const diffLabel = newTotal > oldTotal ? '追加差額：NT$ '+diff : '退款差額：NT$ '+diff;
 
         if (!confirm(
-            '確認送出修改？
-
+            '確認送出修改？\n\n訂單 #'+posFoundOrder.orderId+'\n顧客：'+posFoundOrder.name+
+            '\n原金額：NT$ '+oldTotal+'\n新金額：NT$ '+newTotal+
+            '\n'+modType+'（'+diffLabel+'）\n\n系統將自動通知員工確認。'
+        )) return;
 訂單 #'+posFoundOrder.orderId+'
 '+
             '顧客：'+posFoundOrder.name+'
