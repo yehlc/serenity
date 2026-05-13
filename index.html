@@ -81,6 +81,25 @@
 
 <!-- POS 入口 -->
 <button id="posEntryBtn" onclick="openPosModal()">🖥️ 門市點餐</button>
+<button id="posSearchBtn" onclick="openSearchModal()" style="display:none;position:fixed;top:115px;right:12px;z-index:15;background:#1565c0;color:#fff;border:none;padding:10px 16px;border-radius:20px;font-weight:bold;font-size:.9em;box-shadow:0 2px 8px rgba(0,0,0,.25);cursor:pointer;">🔍 修改訂單</button>
+
+<!-- ─ POS 搜尋訂單 Modal ─ -->
+<div class="modal-overlay" id="searchModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>🔍 搜尋顧客訂單</h3>
+            <button class="close-btn" onclick="closeModal('searchModal')">×</button>
+        </div>
+        <div class="form-group">
+            <label>輸入顧客電話查詢</label>
+            <div style="display:flex;gap:8px;">
+                <input type="tel" id="searchPhone" placeholder="例如: 0912345678" style="flex:1;">
+                <button onclick="doSearch()" style="padding:12px 16px;background:#1565c0;color:#fff;border:none;border-radius:8px;font-weight:bold;cursor:pointer;white-space:nowrap;">查詢</button>
+            </div>
+        </div>
+        <div id="searchResults" style="margin-top:10px;"></div>
+    </div>
+</div>
 
 <!-- ─ 一般顧客訂單 Modal ─ -->
 <div class="modal-overlay" id="orderModal">
@@ -213,6 +232,7 @@
             document.getElementById('pageHeader').innerHTML =
                 '祥和蔬食料理 - 年菜預購 <span class="pos-badge">門市POS</span>';
             document.getElementById('posEntryBtn').style.display = 'block';
+            document.getElementById('posSearchBtn').style.display = 'block';
             document.getElementById('cartBar').style.display = 'none'; // POS 不顯示下方購物車
             loadInventory();
         } else {
@@ -437,6 +457,145 @@
             alert('送出失敗，請稍後再試。');
             setBtnState('submitBtn','確認送出訂單',false);
         });
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // POS 搜尋 & 修改訂單
+    // ════════════════════════════════════════════════════════════════
+    let currentEditOrder = null; // 目前正在修改的訂單資訊
+
+    function openSearchModal(){
+        document.getElementById('searchPhone').value='';
+        document.getElementById('searchResults').innerHTML='';
+        document.getElementById('searchModal').style.display='flex';
+    }
+
+    function doSearch(){
+        const phone = document.getElementById('searchPhone').value.trim();
+        if(!phone){ alert('請輸入電話號碼！'); return; }
+        document.getElementById('searchResults').innerHTML='<p style="color:#888;text-align:center;">搜尋中...</p>';
+
+        fetch(GAS_URL+'?posSearch='+encodeURIComponent(phone))
+            .then(r=>r.json()).then(res=>{
+            const container = document.getElementById('searchResults');
+            if(!res.orders||!res.orders.length){
+                container.innerHTML='<p style="color:#d32f2f;text-align:center;">找不到此電話的訂單</p>';
+                return;
+            }
+            const statusColor={'付清':'#2e7d32','付訂金':'#e65100','未付':'#d32f2f','退款待處理':'#1565c0','已取消':'#999'};
+            container.innerHTML = res.orders.map(o=>`
+                <div style="border:1px solid #eee;border-radius:10px;padding:14px;margin-bottom:10px;background:#fafafa;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                        <div>
+                            <b>#${o.orderId}</b> ${o.name}<br>
+                            <span style="font-size:.85em;color:#666;">${o.date} ${o.time} | ${o.status==='付清'?'✅ ':o.status==='未付'?'🔴 ':'🟡 '}<span style="color:${statusColor[o.status]||'#333'};">${o.status}</span></span><br>
+                            <span style="font-size:.85em;">總額：NT$ ${o.total}${o.paid>0?' | 已付：NT$ '+o.paid:''}${o.unpaid>0?' | 未付：NT$ '+o.unpaid:''}</span>
+                        </div>
+                    </div>
+                    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+                        <button onclick="loadOrderForEdit(${JSON.stringify(o).replace(/"/g,'&quot;')})" style="flex:1;padding:8px;background:#1565c0;color:#fff;border:none;border-radius:6px;font-weight:bold;cursor:pointer;min-width:90px;">✏️ 加減訂購</button>
+                    </div>
+                </div>
+            `).join('');
+        }).catch(()=>{
+            document.getElementById('searchResults').innerHTML='<p style="color:#d32f2f;text-align:center;">搜尋失敗，請重試</p>';
+        });
+    }
+
+    function loadOrderForEdit(order){
+        currentEditOrder = order;
+        closeModal('searchModal');
+
+        // 還原菜單數量為該訂單的數量
+        const h = order.items;
+        qty = h.slice(0,16).concat(h.slice(17,22)).map(v=>parseInt(v)||0);
+        renderMenu();
+        calcTotal();
+
+        // 預填 POS 表單
+        document.getElementById('posCustName').value  = order.name;
+        document.getElementById('posCustPhone').value = order.phone;
+        if(order.date) document.getElementById('posPickupDate').value = order.date;
+
+        // 開啟 POS Modal，提示這是修改模式
+        selPay('none');
+        updatePosSummary();
+        document.getElementById('posModal').style.display='flex';
+
+        // 在 POS modal 頂部插入修改提示
+        let notice = document.getElementById('posEditNotice');
+        if(!notice){
+            notice = document.createElement('div');
+            notice.id = 'posEditNotice';
+            notice.style.cssText='background:#e3f2fd;border-left:4px solid #1565c0;padding:10px 14px;border-radius:6px;margin-bottom:15px;font-size:.9em;color:#1565c0;';
+            document.getElementById('posSubmitBtn').parentNode.insertBefore(notice, document.getElementById('posSubmitBtn'));
+        }
+        const stColor = {'付清':'#2e7d32','付訂金':'#e65100','未付':'#d32f2f','退款待處理':'#1565c0'}[order.status]||'#333';
+        notice.innerHTML = `✏️ 修改模式 — 訂單 <b>#${order.orderId}</b> (${order.name})<br>
+            <span style="font-size:.85em;">原狀態：<b style="color:${stColor}">${order.status}</b> | 原總額：NT$ ${order.total}${order.paid>0?' | 已付：NT$'+order.paid:''}</span>`;
+
+        // 修改送出按鈕文字
+        document.getElementById('posSubmitBtn').innerText = '✅ 確認修改訂單';
+        document.getElementById('posSubmitBtn').onclick = submitPosModifyOrder;
+    }
+
+    function submitPosModifyOrder(){
+        if(!currentEditOrder){ alert('錯誤：沒有選取訂單'); return; }
+        const name  = document.getElementById('posCustName').value.trim();
+        const phone = document.getElementById('posCustPhone').value.trim();
+        const date  = document.getElementById('posPickupDate').value;
+        if(!name||!phone||!date){ alert('請填寫完整姓名、電話與取貨日期！'); return; }
+        if(total<=0){ alert('請至少選擇一道餐點！'); return; }
+
+        const newTotal = total;
+        const oldTotal = Number(currentEditOrder.total)||0;
+        const paidAmt  = Number(currentEditOrder.paid)||0;
+        const oldStatus= currentEditOrder.status;
+
+        // 計算差額類型
+        let modDesc = '';
+        if(newTotal > oldTotal){
+            modDesc = `加訂：需補繳 NT$ ${newTotal-oldTotal}`;
+        } else if(newTotal < oldTotal){
+            const refund = Math.max(0, paidAmt - newTotal);
+            modDesc = newTotal===0 ? `取消訂單：退款 NT$ ${paidAmt}` : `少訂：退款 NT$ ${refund}`;
+        } else {
+            modDesc = '金額未變，僅更新內容';
+        }
+
+        if(!confirm(`確認修改訂單 #${currentEditOrder.orderId}？\n${modDesc}`)) return;
+
+        setBtnState('posSubmitBtn','修改中...',true);
+
+        fetch(GAS_URL,{
+            method:'POST',mode:'no-cors',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({
+                userId: currentEditOrder.lineId || 'POS_STORE',
+                action: 'update',
+                orderId: currentEditOrder.orderId,
+                name, phone,
+                branch: '祥和蔬食料理 鎮江店',
+                date,
+                time:   document.getElementById('posPickupTime').value,
+                totalAmount: newTotal,
+                items_qty_array: qty,
+                source: 'POS',
+                payStatus: currentEditOrder.status
+            })
+        }).then(()=>{
+            alert(`訂單 #${currentEditOrder.orderId} 修改完成！\n${modDesc}\n${(oldStatus==='付清'||oldStatus==='付訂金')&&newTotal!==oldTotal?'\n📢 已通知員工審核差額。':''}`);
+            closeModal('posModal');
+            currentEditOrder = null;
+            qty = new Array(menuItems.length).fill(0);
+            renderMenu(); calcTotal();
+            // 還原按鈕
+            document.getElementById('posSubmitBtn').innerText='✅ 建立門市訂單';
+            document.getElementById('posSubmitBtn').onclick=submitPosOrder;
+            const notice = document.getElementById('posEditNotice');
+            if(notice) notice.remove();
+        }).catch(()=>alert('修改失敗，請稍後再試。'))
+          .finally(()=>setBtnState('posSubmitBtn','✅ 確認修改訂單',false));
     }
 
     // ════════════════════════════════════════════════════════════════
