@@ -92,14 +92,20 @@
         <div class="paid-notice" id="paidNotice" style="display:none;">
             ⚠️ 您的訂單已付款，修改後狀態將重置為「未付」，需重新完成付款流程。
         </div>
-        <div class="form-group"><label>取貨分店</label>
-            <select id="branch"><option value="鎮江店">鎮江店</option><option value="慶城店">慶城店</option></select></div>
-        <div class="form-group"><label>取貨日期</label><input type="date" id="pickupDate" required></div>
+        <div class="form-group"><label>取貨門市</label>
+            <input type="text" value="祥和蔬食料理 鎮江店" readonly style="background:#f5f5f5;color:#555;cursor:not-allowed;"></div>
+        <div class="form-group"><label>取貨日期</label>
+            <select id="pickupDate" required>
+                <option value="">請選擇取貨日期</option>
+                <option value="2027-02-04">2027 年 02 月 04 日（除夕）</option>
+                <option value="2027-02-05">2027 年 02 月 05 日（初一）</option>
+            </select></div>
         <div class="form-group"><label>取貨時間</label>
             <select id="pickupTime">
-                <option value="11:30">11:30</option><option value="12:00">12:00</option>
-                <option value="12:30">12:30</option><option value="17:30">17:30</option>
-                <option value="18:00">18:00</option>
+                <option value="12:00">12:00</option>
+                <option value="13:00">13:00</option>
+                <option value="14:00">14:00</option>
+                <option value="15:30">15:30</option>
             </select></div>
         <div class="form-group"><label>訂購人姓名</label><input type="text" id="custName" placeholder="請填寫真實姓名" required></div>
         <div class="form-group"><label>連絡電話</label><input type="tel" id="custPhone" placeholder="例如: 0912345678" required></div>
@@ -114,14 +120,20 @@
             <h3>🖥️ 門市現場建立訂單</h3>
             <button class="close-btn" onclick="closeModal('posModal')">×</button>
         </div>
-        <div class="form-group"><label>取貨分店</label>
-            <select id="posBranch"><option value="鎮江店">鎮江店</option><option value="慶城店">慶城店</option></select></div>
-        <div class="form-group"><label>取貨日期</label><input type="date" id="posPickupDate" required></div>
+        <div class="form-group"><label>取貨門市</label>
+            <input type="text" value="祥和蔬食料理 鎮江店" readonly style="background:#f5f5f5;color:#555;cursor:not-allowed;"></div>
+        <div class="form-group"><label>取貨日期</label>
+            <select id="posPickupDate" required>
+                <option value="">請選擇取貨日期</option>
+                <option value="2027-02-04">2027 年 02 月 04 日（除夕）</option>
+                <option value="2027-02-05">2027 年 02 月 05 日（初一）</option>
+            </select></div>
         <div class="form-group"><label>取貨時間</label>
             <select id="posPickupTime">
-                <option value="11:30">11:30</option><option value="12:00">12:00</option>
-                <option value="12:30">12:30</option><option value="17:30">17:30</option>
-                <option value="18:00">18:00</option>
+                <option value="12:00">12:00</option>
+                <option value="13:00">13:00</option>
+                <option value="14:00">14:00</option>
+                <option value="15:30">15:30</option>
             </select></div>
         <div class="form-group"><label>顧客姓名</label><input type="text" id="posCustName" placeholder="顧客姓名" required></div>
         <div class="form-group"><label>連絡電話</label><input type="tel" id="posCustPhone" placeholder="例如: 0912345678" required></div>
@@ -357,7 +369,7 @@
             body:JSON.stringify({
                 userId:'POS_STORE', action:'new', orderId:null,
                 name, phone,
-                branch: document.getElementById('posBranch').value,
+                branch: '祥和蔬食料理 鎮江店',
                 date,
                 time:   document.getElementById('posPickupTime').value,
                 totalAmount: total,
@@ -400,7 +412,7 @@
                     action,
                     orderId: action==='update'?lastOrder.orderId:null,
                     name, phone,
-                    branch:  document.getElementById('branch').value,
+                    branch:  '祥和蔬食料理 鎮江店',
                     date,
                     time:    document.getElementById('pickupTime').value,
                     totalAmount: total,
