@@ -138,6 +138,27 @@
         <div class="form-group"><label>顧客姓名</label><input type="text" id="posCustName" placeholder="顧客姓名" required></div>
         <div class="form-group"><label>連絡電話</label><input type="tel" id="posCustPhone" placeholder="例如: 0912345678" required></div>
 
+        <!-- POS 修改訂單 Modal -->
+<div class="modal-overlay" id="posEditModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>📝 修改現有訂單</h3>
+      <button class="close-btn" onclick="closeModal('posEditModal')">×</button>
+    </div>
+    <div class="form-group">
+      <label>輸入訂單編號 或 顧客電話</label>
+      <input type="text" id="posEditSearch" placeholder="例如：1 或 0912345678">
+      <button class="submit-btn" onclick="searchPosOrder()">查詢訂單</button>
+    </div>
+    <div id="posEditResult" style="display:none;">
+      <div class="order-summary" id="posEditSummary"></div>
+      <div class="menu-container" id="posEditMenu"></div>
+      <button class="submit-btn green" onclick="submitPosEdit()">儲存修改</button>
+    </div>
+  </div>
+</div>
+
+
         <!-- 付款方式 -->
         <div class="payment-section">
             <h4>💰 現場付款方式</h4>
@@ -244,9 +265,7 @@
                 } else {
                     document.getElementById('choiceModal').style.display='flex';
                 }
-            } else {
-                startEdit(false);
-            }
+            } 
         });
     }
 
@@ -428,6 +447,56 @@
             setBtnState('submitBtn','確認送出訂單',false);
         });
     }
+    let posEditOrder = null;
+
+function searchPosOrder() {
+  var q = document.getElementById('posEditSearch').value.trim();
+  if (!q) return;
+  fetch(GAS_URL, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      action: 'query_order',
+      orderId: /^\d+$/.test(q) ? q : '',
+      phone: q
+    })
+  }).then(r=>r.json()).then(res=>{
+    if (!res.found) { alert('找不到訂單'); return; }
+    posEditOrder = res;
+    document.getElementById('posEditResult').style.display = 'block';
+    // 渲染菜單並填入數量
+    qty = res.items.slice(0,16).concat(res.items.slice(17,22)).map(v=>parseInt(v)||0);
+    renderMenuIn('posEditMenu');
+    calcTotal();
+    document.getElementById('posEditSummary').innerHTML =
+      '訂單 #'+res.orderId+'｜顧客：'+res.name+'｜總額 NT$'+res.total;
+  });
+}
+
+function submitPosEdit() {
+  if (!posEditOrder) return;
+  var newTotal = total;
+  fetch(GAS_URL, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      action: 'pos_update',
+      orderId: posEditOrder.orderId,
+      totalAmount: newTotal,
+      items_qty_array: qty
+    })
+  }).then(r=>r.json()).then(res=>{
+    if (res.status==='success') {
+      alert('修改成功！'+(res.diff!==0?'差額：NT$ '+res.diff:''));
+      closeModal('posEditModal');
+      qty = new Array(menuItems.length).fill(0);
+      renderMenu(); calcTotal();
+    } else {
+      alert('修改失敗：'+res.message);
+    }
+  });
+}
+
 
     // ════════════════════════════════════════════════════════════════
     // 工具
