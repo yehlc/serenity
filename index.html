@@ -160,16 +160,6 @@
             <div class="tot" id="summaryTotal"></div>
         </div>
 
-        <!-- POS 查詢/修改既有訂單 -->
-        <div style="border-top:1px dashed #ccc;margin:15px 0;padding-top:15px;">
-          <h4 style="margin:0 0 10px;color:#555;font-size:.95em;">🔍 查詢並修改既有訂單</h4>
-          <div class="form-group" style="margin-bottom:8px;">
-            <input type="tel" id="posSearchPhone" placeholder="輸入顧客電話查詢訂單" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:1em;">
-          </div>
-          <button onclick="posSearchOrder()" style="width:100%;padding:10px;background:#555;color:#fff;border:none;border-radius:8px;font-size:.95em;font-weight:bold;cursor:pointer;margin-bottom:10px;">🔍 查詢訂單</button>
-          <div id="posSearchResult" style="display:none;background:#f9f9f9;border:1px solid #ddd;border-radius:8px;padding:12px;font-size:.9em;margin-bottom:10px;"></div>
-          <button id="posModifyBtn" onclick="submitPosModify()" style="display:none;width:100%;padding:12px;background:#1565c0;color:#fff;border:none;border-radius:8px;font-size:1em;font-weight:bold;cursor:pointer;">📝 送出修改（差額/退款通知員工）</button>
-        </div>
         <button class="submit-btn green" id="posSubmitBtn" onclick="submitPosOrder()">✅ 建立門市訂單</button>
     </div>
 </div>
@@ -446,110 +436,6 @@
     function setBtnState(id,txt,disabled){
         const b=document.getElementById(id);
         b.innerText=txt; b.disabled=disabled;
-    }
-
-    // ════════════════════════════════════════════════════════════════
-    // ★ POS 查詢既有訂單
-    // ════════════════════════════════════════════════════════════════
-    let posFoundOrder = null; // 查詢到的訂單資料
-
-    function posSearchOrder() {
-        const phone = document.getElementById('posSearchPhone').value.trim();
-        if (!phone) { alert('請輸入顧客電話！'); return; }
-
-        const resultDiv = document.getElementById('posSearchResult');
-        resultDiv.style.display = 'block';
-        resultDiv.innerHTML = '查詢中...';
-        document.getElementById('posModifyBtn').style.display = 'none';
-        posFoundOrder = null;
-
-        fetch(GAS_URL + '?posSearch=' + encodeURIComponent(phone))
-            .then(r => r.json())
-            .then(res => {
-                if (!res.orders || res.orders.length === 0) {
-                    resultDiv.innerHTML = '❌ 查無此電話的訂單。';
-                    return;
-                }
-                const o = res.orders[0]; // 取最新一筆
-                posFoundOrder = o;
-                resultDiv.innerHTML =
-                    '<b>✅ 找到訂單 #' + o.orderId + '</b><br>' +
-                    '顧客：' + o.name + '<br>' +
-                    '狀態：' + o.status + '<br>' +
-                    '目前總額：NT$ ' + o.total + '<br>' +
-                    '已付：NT$ ' + (o.paid || 0) + '<br>' +
-                    '<hr style="margin:8px 0;border-color:#eee;">'+
-                    '<b>📌 請在上方選好新的餐點數量後，點下方「送出修改」</b>';
-                // 將現有數量載入菜單
-                if (o.items && o.items.length) {
-                    let part1 = o.items.slice(0,16);
-                    let part2 = o.items.slice(17,22);
-                    qty = part1.concat(part2).map(v=>parseInt(v)||0);
-                    renderMenu(); calcTotal();
-                }
-                document.getElementById('posModifyBtn').style.display = 'block';
-            })
-            .catch(() => { resultDiv.innerHTML = '❌ 查詢失敗，請稍後再試。'; });
-    }
-
-    // ★ POS 送出修改（由員工確認加/減訂）
-    function submitPosModify() {
-        if (!posFoundOrder) { alert('請先查詢訂單！'); return; }
-        if (total <= 0) { alert('餐點數量不能為0，如需取消請聯繫顧客並在系統設定取消。'); return; }
-
-        const oldTotal = posFoundOrder.total;
-        const newTotal = total;
-        if (oldTotal === newTotal) { alert('金額與原訂單相同，無需修改。'); return; }
-
-        const diff = Math.abs(newTotal - oldTotal);
-        const modType = newTotal > oldTotal ? '加訂' : '少訂';
-        const diffLabel = newTotal > oldTotal ? '追加差額：NT$ '+diff : '退款差額：NT$ '+diff;
-
-        if (!confirm(
-            '確認送出修改？\n\n訂單 #'+posFoundOrder.orderId+'\n顧客：'+posFoundOrder.name+
-            '\n原金額：NT$ '+oldTotal+'\n新金額：NT$ '+newTotal+
-            '\n'+modType+'（'+diffLabel+'）\n\n系統將自動通知員工確認。'
-        )) return;
-訂單 #'+posFoundOrder.orderId+'
-'+
-            '顧客：'+posFoundOrder.name+'
-'+
-            '原金額：NT$ '+oldTotal+'
-新金額：NT$ '+newTotal+'
-'+
-            modType+'（'+diffLabel+'）
-
-系統將自動通知員工確認。'
-        )) return;
-
-        setBtnState('posModifyBtn','送出中...',true);
-
-        fetch(GAS_URL, {
-            method:'POST', mode:'no-cors',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({
-                userId: posFoundOrder.lineId || 'POS_STORE',
-                action: 'update',
-                orderId: posFoundOrder.orderId,
-                name: posFoundOrder.name,
-                phone: posFoundOrder.phone,
-                branch: '祥和蔬食料理 鎮江店',
-                date: posFoundOrder.date,
-                time: posFoundOrder.time || '12:00',
-                totalAmount: newTotal,
-                items_qty_array: qty,
-                source: 'POS'
-            })
-        }).then(() => {
-            alert('修改申請已送出！\n系統正在通知員工確認差額/退款。');
-            posFoundOrder = null;
-            document.getElementById('posSearchResult').style.display = 'none';
-            document.getElementById('posModifyBtn').style.display = 'none';
-            document.getElementById('posSearchPhone').value = '';
-            qty = new Array(menuItems.length).fill(0);
-            renderMenu(); calcTotal();
-        }).catch(() => alert('送出失敗，請稍後再試。'))
-          .finally(() => setBtnState('posModifyBtn','📝 送出修改（差額/退款通知員工）',false));
     }
 </script>
 </body>
