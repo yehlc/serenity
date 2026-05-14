@@ -524,20 +524,15 @@ function submitPosOrder() {
 //  POS：訂單管理（搜尋 + 列表）
 // ══════════════════════════════════════════════════════════
 async function openSearchModal() {
-    document.getElementById('searchPhone').value = '';
-    document.getElementById('searchStatus').innerText = '載入訂單中...';
-    document.getElementById('searchResults').innerHTML = '';
     document.getElementById('searchModal').style.display = 'flex';
-
+    document.getElementById('searchStatus').innerText = '讀取中...';
     try {
-        const res  = await fetch(GAS_URL + '?posListAll=1');
+        const res = await fetch(GAS_URL + '?posListAll=1');
         const data = await res.json();
-        allOrders  = data.orders || [];
+        allOrders = data.orders || [];
         renderOrderList(allOrders);
-        document.getElementById('searchStatus').innerText = `共 ${allOrders.length} 筆訂單`;
-    } catch (e) {
-        document.getElementById('searchStatus').innerText = '⚠️ 載入失敗，請關閉後重試';
-    }
+        document.getElementById('searchStatus').innerText = `共 ${allOrders.length} 筆`;
+    } catch (e) { alert('讀取失敗'); }
 }
 
 function doSearch() {
@@ -558,29 +553,17 @@ function doSearch() {
 
 function renderOrderList(orders) {
     const container = document.getElementById('searchResults');
-    if (!orders.length) {
-        container.innerHTML = '<p style="text-align:center;color:#bbb;padding:24px 0;font-size:.95em;">沒有符合的訂單</p>';
-        return;
-    }
-    container.innerHTML = orders.map(o => {
-        const color = STATUS_COLOR[o.status] || '#666';
-        const phoneTail = o.phone ? '末四碼 ' + String(o.phone).replace(/[\s\-]/g,'').slice(-4) : '';
-        const paidInfo  = o.paid > 0 ? `　已付：NT$ ${o.paid}` : '';
-        return `<div class="order-card">
+    container.innerHTML = orders.map(o => `
+        <div class="order-card">
             <div class="order-card-top">
-                <div>
-                    <div class="order-card-name">#${o.orderId}　${o.name}</div>
-                    <div class="order-card-meta">📱 ${phoneTail}　📅 ${o.date}</div>
-                </div>
-                <span class="status-tag" style="color:${color};border:1px solid ${color};background:${color}1a;">${o.status}</span>
+                <span class="order-card-name">#${o.orderId} ${o.name}</span>
+                <span class="status-tag" style="border:1px solid #666;">${o.status}</span>
             </div>
-            <div class="order-card-amount">💰 總額：NT$ ${o.total}${paidInfo}</div>
+            <div>總額: ${o.total} / 已付: ${o.paid}</div>
             <div class="order-card-actions">
-                <button class="btn-edit" onclick='doEditOrder(${JSON.stringify(o).replace(/'/g,"&#39;")})'>✏️ 編輯</button>
-                <button class="btn-hide" onclick="confirmHideOrder('${o.orderId}','${escHtml(o.name)}')">🗑 隱藏</button>
+                <button class="btn-edit" onclick='doEditOrder(${JSON.stringify(o)})'>✏️ 編輯</button>
             </div>
-        </div>`;
-    }).join('');
+        </div>`).join('');
 }
 
 // ── 編輯：第一步 ── 載入數量回菜單
@@ -589,130 +572,86 @@ function doEditOrder(order) {
     isEditMode = true;
     closeModal('searchModal');
     
-    const items = order.items;
-    qty = items.slice(0, 16).concat(items.slice(17, 22)).map(v => parseInt(v) || 0);
+    // 1. 將舊訂單數量填回 UI
+    qty = order.items.map(v => parseInt(v) || 0);
     renderMenu();
+    calcTotal();
     
     document.getElementById('editBanner').style.display = 'block';
-    document.getElementById('editBannerText').innerText = `✏️ 編輯模式 — 訂單 #${order.orderId}（${order.name}）`;
-    
-    const cartBar = document.getElementById('cartBar');
-    cartBar.classList.add('show');
-    cartBar.onclick = openEditInfoModal;
-    const btn = document.getElementById('cartBtnText');
-    btn.innerText = '下一步：填寫資訊 ➔';
-    btn.className = 'cart-btn-text blue';
-
-    calcTotal();
+    document.getElementById('editBannerText').innerText = `✏️ 編輯模式: #${order.orderId}`;
+    document.getElementById('cartBtnText').innerText = '確認修改 ➔';
+    document.getElementById('cartBtnText').className = 'cart-btn-text blue';
 }
 
 // POS 加訂付款模式切換
 function selEditPay(mode) {
     editPayMode = mode;
-    ['none', 'deposit', 'full'].forEach((m, i) => {
-        document.getElementById('epBtn' + i).classList.toggle('sel', m === mode);
-    });
+    ['none', 'deposit', 'full'].forEach((m, i) => document.getElementById('epBtn' + i).classList.toggle('sel', m === mode));
     document.getElementById('editDepWrap').classList.toggle('show', mode === 'deposit');
 }
 
 // ── 編輯：第二步 ── 填寫訂購資訊
 function openEditInfoModal() {
-    if (total <= 0) { alert('餐點數量全為 0，請先選擇餐點！'); return; }
-
     const o = currentEditOrder;
-    document.getElementById('editInfoTitle').innerText = `✏️ 修改訂單 #${o.orderId}`;
-    
-    const newT = total, oldT = Number(o.total) || 0;
-    const oldPaid = Number(o.paid) || 0;
-    let diffNote = '';
-    
-    if (newT > oldT) diffNote = `<br>🔺 追加差額：<strong style="color:#e65100;">NT$ ${newT - oldT}</strong>`;
-    else if (newT < oldT) diffNote = `<br>🔻 減少金額：<strong style="color:#1565c0;">NT$ ${oldT - newT}</strong>（將通知員工退款）`;
-    
-    document.getElementById('editInfoSummary').innerHTML =
-        `顧客：<strong>${o.name}</strong><br>` +
-        `原金額：NT$ ${oldT} → 新金額：<strong style="color:#8b0000;">NT$ ${newT}</strong>${diffNote}`;
+    const newTotal = total;
+    const alreadyPaid = Number(o.paid) || 0;
+    const balance = newTotal - alreadyPaid; // 重要：計算應補或應退
 
-    if (o.source === 'POS' && newT > oldT) {
-        const newUnpaid = newT - oldPaid;
+    let summaryHtml = `原金額：NT$ ${o.total}<br>已付款：NT$ ${alreadyPaid}<br>新金額：<strong style="color:#8b0000;">NT$ ${newTotal}</strong><br>`;
+    
+    if (balance > 0) {
+        summaryHtml += `<span style="color:#e65100;font-weight:bold;">🔺 需補差額：NT$ ${balance}</span>`;
         document.getElementById('editPaymentSection').style.display = 'block';
-        document.getElementById('editPaymentTitle').innerText = `💰 待收金額：NT$ ${newUnpaid}`;
-        selEditPay('none');
-    } else {
+        document.getElementById('editPaymentTitle').innerText = `💰 待補差額：NT$ ${balance}`;
+    } else if (balance < 0) {
+        summaryHtml += `<span style="color:#1565c0;font-weight:bold;">🔻 需退款：NT$ ${Math.abs(balance)}</span>`;
         document.getElementById('editPaymentSection').style.display = 'none';
-        editPayMode = 'none';
+    } else {
+        summaryHtml += `<span>金額無變動</span>`;
+        document.getElementById('editPaymentSection').style.display = 'none';
     }
 
-    // 預填欄位
-    document.getElementById('editPickupDate').value = o.date  || '';
-    
-    const timeSelect = document.getElementById('editPickupTime');
-    timeSelect.value = o.time || '';
-    if (!timeSelect.value && o.time) timeSelect.value = '12:00'; // Fallback
-    
-    document.getElementById('editCustName').value   = o.name  || '';
-    document.getElementById('editCustPhone').value  = o.phone || '';
-
+    document.getElementById('editInfoSummary').innerHTML = summaryHtml;
+    document.getElementById('editCustName').value = o.name;
+    document.getElementById('editCustPhone').value = o.phone;
     document.getElementById('editInfoModal').style.display = 'flex';
 }
 
 // ── 編輯：送出修改
-function submitEditOrder() {
-    const name  = document.getElementById('editCustName').value.trim();
-    const phone = document.getElementById('editCustPhone').value.trim();
-    const date  = document.getElementById('editPickupDate').value;
-    const time  = document.getElementById('editPickupTime').value;
-
-    if (!validateOrderForm(name, phone, date, time)) return;
-
+async function submitEditOrder() {
     const o = currentEditOrder;
-    const newT = total, oldT = Number(o.total) || 0;
-    const oldPaid = Number(o.paid) || 0;
+    const name = document.getElementById('editCustName').value.trim();
+    const phone = document.getElementById('editCustPhone').value.trim();
+    const newTotal = total;
+    const alreadyPaid = Number(o.paid) || 0;
     
     let posCollectedAmt = 0;
-    let posEditMode = false;
+    if (editPayMode === 'full') posCollectedAmt = newTotal - alreadyPaid;
+    else if (editPayMode === 'deposit') posCollectedAmt = Number(document.getElementById('editDepositAmt').value) || 0;
 
-    if (document.getElementById('editPaymentSection').style.display === 'block') {
-        posEditMode = true;
-        const newUnpaid = newT - oldPaid;
-        if (editPayMode === 'full') {
-            posCollectedAmt = newUnpaid;
-        } else if (editPayMode === 'deposit') {
-            posCollectedAmt = parseInt(document.getElementById('editDepositAmt').value) || 0;
-            if (posCollectedAmt <= 0) { alert('請輸入收取金額！'); return; }
-            if (posCollectedAmt >= newUnpaid) { alert('收取金額不可大於等於待收餘額，全付請選「全額付清」！'); return; }
-        }
-    }
+    const btn = document.getElementById('editSubmitBtn');
+    btn.disabled = true; btn.innerText = '處理中...';
 
-    const modDesc = newT === oldT ? '金額不變，更新內容' :
-        newT > oldT ? `加訂，需追加 NT$ ${newT - oldT}` : `少訂，需退款 NT$ ${oldT - newT}`;
-    
-    if (!confirm(`確認修改訂單 #${o.orderId}？\n顧客：${name}\n${modDesc}`)) return;
+    const payload = {
+        action: 'update',
+        orderId: o.orderId,
+        name: name,
+        phone: phone,
+        date: document.getElementById('editPickupDate').value,
+        time: document.getElementById('editPickupTime').value,
+        totalAmount: newTotal,
+        items_qty_array: qty,
+        posCollectedAmt: posCollectedAmt, // 傳送本次實收金額
+        // 關鍵：將原本的支付資訊傳回，防止後端清空
+        bankAccount: o.bankAccount || '', 
+        paymentStatus: o.status
+    };
 
-    setBtnState('editSubmitBtn', '送出中...', true);
-    fetch(GAS_URL, {
-        method: 'POST', mode: 'no-cors',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            userId: o.lineId || 'POS_STORE',
-            action: 'update',
-            orderId: o.orderId,
-            name, phone, branch: '鎮江店', date, time,
-            totalAmount: newT,
-            items_qty_array: qty,
-            source: 'POS',
-            payStatus: o.status,
-            posEditMode: posEditMode,
-            posCollectedAmt: posCollectedAmt
-        })
-    }).then(() => {
-        const idx = allOrders.findIndex(x => String(x.orderId) === String(o.orderId));
-        if (idx !== -1) allOrders[idx] = {...allOrders[idx], name, phone, date, time, total: newT, paid: oldPaid + posCollectedAmt};
-        alert(`訂單 #${o.orderId} 修改完成！\n${modDesc}`);
-        closeModal('editInfoModal');
-        exitEditMode();
-    }).catch(() => alert('送出失敗，請稍後再試。'))
-      .finally(() => setBtnState('editSubmitBtn', '✅ 確認修改訂單', false));
+    try {
+        await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
+        alert('修改成功！');
+        location.reload();
+    } catch (e) { alert('失敗'); btn.disabled = false; }
 }
 
 // ── 取消編輯模式
@@ -788,6 +727,12 @@ function submitOrder() {
 //  工具函式
 // ══════════════════════════════════════════════════════════
 function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    function handleCartClick() {
+    if (total <= 0) return;
+    if (isEditMode) openEditInfoModal();
+    else if (isPosMode) openPosModal();
+    else document.getElementById('orderModal').style.display = 'flex';
+}
 function setBtnState(id, txt, disabled) { const b = document.getElementById(id); b.innerText = txt; b.disabled = disabled; }
 function resetMenuState() { qty = new Array(menuItems.length).fill(0); renderMenu(); calcTotal(); }
 function resetPosForm() {
