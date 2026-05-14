@@ -7,21 +7,15 @@
     <style>
         *{box-sizing:border-box;}
         body{font-family:'Helvetica Neue',Helvetica,Arial,'微軟正黑體',sans-serif;margin:0;padding:0;background:#f5f5f5;padding-bottom:80px;}
-        
-        /* ── Header & Header Actions ── */
-        .header {
-            background:#8b0000; color:#fff; padding:12px 15px; font-size:1.15em; font-weight:bold;
-            position:sticky; top:0; z-index:10;
-            display:flex; justify-content:space-between; align-items:center;
-        }
-        .header-title { display:flex; align-items:center; }
-        .pos-badge { background:#ff6f00; font-size:.7em; padding:3px 8px; border-radius:10px; margin-left:8px; white-space:nowrap; }
-        .header-actions { display:none; gap:8px; }
-        .hdr-btn { padding:6px 12px; border:none; border-radius:6px; font-weight:bold; color:white; cursor:pointer; font-size:.85em; box-shadow:0 1px 3px rgba(0,0,0,.3); }
-        .hdr-btn.orange { background:#ff6f00; }
-        .hdr-btn.blue { background:#1565c0; }
 
-        /* ── 編輯模式 Banner ── */
+        .header{background:#8b0000;color:#fff;padding:12px 15px;font-size:1.15em;font-weight:bold;position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center;}
+        .header-title{display:flex;align-items:center;}
+        .pos-badge{background:#ff6f00;font-size:.7em;padding:3px 8px;border-radius:10px;margin-left:8px;white-space:nowrap;}
+        .header-actions{display:none;gap:8px;}
+        .hdr-btn{padding:6px 12px;border:none;border-radius:6px;font-weight:bold;color:white;cursor:pointer;font-size:.85em;box-shadow:0 1px 3px rgba(0,0,0,.3);}
+        .hdr-btn.orange{background:#ff6f00;}
+        .hdr-btn.blue{background:#1565c0;}
+
         .edit-banner{display:none;background:#e3f2fd;border-left:4px solid #1565c0;padding:10px 15px;font-size:.88em;color:#1565c0;position:sticky;top:54px;z-index:9;box-shadow:0 2px 4px rgba(0,0,0,0.05);}
         .edit-banner span{font-weight:bold;}
         .edit-banner a{color:#1565c0;margin-left:12px;text-decoration:underline;cursor:pointer;font-size:.9em;float:right;}
@@ -36,7 +30,10 @@
         .qty-btn{width:30px;height:30px;border:1px solid #ccc;background:#fff;border-radius:5px;font-size:1.2em;cursor:pointer;display:flex;align-items:center;justify-content:center;}
         .qty-input{width:40px;text-align:center;border:none;font-size:1.1em;font-weight:bold;margin:0 5px;background:transparent;}
 
-        /* ── Cart Bar ── */
+        /* 【修改5】辣度選項樣式 */
+        .spice-row{margin-top:6px;font-size:.82em;color:#666;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+        .spice-row label{display:flex;align-items:center;gap:3px;cursor:pointer;}
+
         .cart-bar{position:fixed;bottom:0;left:0;width:100%;background:#333;color:#fff;display:none;justify-content:space-between;align-items:center;padding:15px 20px;cursor:pointer;z-index:20;}
         .cart-bar.show{display:flex;}
         .cart-bar.disabled{background:#999;cursor:not-allowed;}
@@ -44,7 +41,6 @@
         .cart-btn-text{padding:8px 15px;border-radius:20px;font-weight:bold;background:#e91e63;}
         .cart-btn-text.blue{background:#1565c0;}
 
-        /* ── Modals ── */
         .modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);z-index:30;justify-content:center;align-items:flex-end;}
         .modal-content{background:#fff;width:100%;max-height:90vh;border-radius:20px 20px 0 0;padding:25px 20px;overflow-y:auto;animation:slideUp .3s ease-out;}
         @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
@@ -60,7 +56,6 @@
         .submit-btn.gray{background:#555;}
         .submit-btn.blue{background:#1565c0;}
 
-        /* ── Payment section (POS) ── */
         .payment-section{background:#fff8e1;border:1px solid #ffd54f;border-radius:10px;padding:15px;margin-bottom:15px;}
         .payment-section h4{margin:0 0 10px;color:#e65100;font-size:1em;}
         .pay-row{display:flex;gap:10px;margin-bottom:10px;}
@@ -72,7 +67,6 @@
         .order-summary .tot{font-weight:bold;font-size:1.1em;color:#8b0000;margin-top:8px;}
         .paid-notice{background:#fff3e0;border-left:4px solid #ff9800;padding:12px 15px;border-radius:6px;margin-bottom:15px;font-size:.9em;color:#555;}
 
-        /* ── 訂單管理卡片 ── */
         .order-card{border:1px solid #eaeaea;border-radius:10px;padding:12px;margin-bottom:8px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.04);}
         .order-card-top{display:flex;justify-content:space-between;align-items:flex-start;}
         .order-card-name{font-weight:bold;font-size:1em;}
@@ -83,15 +77,10 @@
         .btn-hide{flex:1;padding:8px;background:#fff;color:#c62828;border:1.5px solid #c62828;border-radius:6px;font-weight:bold;cursor:pointer;font-size:.88em;}
         .status-tag{font-weight:bold;font-size:.82em;padding:2px 7px;border-radius:8px;white-space:nowrap;}
 
-        /* ── Search box ── */
         .search-last3{font-size:1.8em!important;letter-spacing:.4em;text-align:center;font-weight:bold!important;border:2px solid #1565c0!important;border-radius:10px!important;}
         .search-hint{font-size:.82em;color:#999;text-align:center;margin-top:4px;}
         .search-status{font-size:.85em;color:#666;margin:6px 0 8px;min-height:1.2em;}
-
-        /* ── Edit info summary box ── */
         .edit-info-box{background:#e3f2fd;border-left:4px solid #1565c0;padding:10px 14px;border-radius:6px;margin-bottom:15px;font-size:.88em;line-height:1.6;}
-
-        /* ── Misc ── */
         #loading{text-align:center;padding:30px;color:#666;font-weight:bold;}
     </style>
 </head>
@@ -118,7 +107,7 @@
     <span class="cart-btn-text" id="cartBtnText">填寫訂單 ➔</span>
 </div>
 
-
+<!-- 訂單管理 Modal -->
 <div class="modal-overlay" id="searchModal">
     <div class="modal-content">
         <div class="modal-header">
@@ -135,6 +124,7 @@
     </div>
 </div>
 
+<!-- POS 編輯訂單 Modal -->
 <div class="modal-overlay" id="editInfoModal">
     <div class="modal-content">
         <div class="modal-header">
@@ -142,14 +132,15 @@
             <button class="close-btn" onclick="closeModal('editInfoModal')">×</button>
         </div>
         <div class="edit-info-box" id="editInfoSummary"></div>
-        
+
         <div class="form-group">
             <label>取貨門市</label>
             <input type="text" value="鎮江店" readonly style="background:#f5f5f5;color:#777;cursor:not-allowed;">
         </div>
         <div class="form-group">
             <label>取貨日期</label>
-            <select id="editPickupDate" required>
+            <!-- 【修改4】onchange 動態產生時間選單 -->
+            <select id="editPickupDate" required onchange="syncTimeOptions('editPickupDate','editPickupTime')">
                 <option value="">請選擇取貨日期</option>
                 <option value="2027-02-04">2027 年 02 月 04 日（除夕）</option>
                 <option value="2027-02-05">2027 年 02 月 05 日（初一）</option>
@@ -157,12 +148,9 @@
         </div>
         <div class="form-group">
             <label>取貨時間</label>
+            <!-- 【修改4】選項由 syncTimeOptions() 動態填入 -->
             <select id="editPickupTime" required>
-                <option value="">請選擇取貨時間</option>
-                <option value="12:00">12:00</option>
-                <option value="13:00">13:00</option>
-                <option value="14:00">14:00</option>
-                <option value="15:30">15:30</option>
+                <option value="">請先選擇日期</option>
             </select>
         </div>
         <div class="form-group">
@@ -193,6 +181,7 @@
     </div>
 </div>
 
+<!-- LIFF 顧客訂單 Modal -->
 <div class="modal-overlay" id="orderModal">
     <div class="modal-content">
         <div class="modal-header">
@@ -208,7 +197,7 @@
         </div>
         <div class="form-group">
             <label>取貨日期</label>
-            <select id="pickupDate" required>
+            <select id="pickupDate" required onchange="syncTimeOptions('pickupDate','pickupTime')">
                 <option value="">請選擇取貨日期</option>
                 <option value="2027-02-04">2027 年 02 月 04 日（除夕）</option>
                 <option value="2027-02-05">2027 年 02 月 05 日（初一）</option>
@@ -217,11 +206,7 @@
         <div class="form-group">
             <label>取貨時間</label>
             <select id="pickupTime" required>
-                <option value="">請選擇取貨時間</option>
-                <option value="12:00">12:00</option>
-                <option value="13:00">13:00</option>
-                <option value="14:00">14:00</option>
-                <option value="15:30">15:30</option>
+                <option value="">請先選擇日期</option>
             </select>
         </div>
         <div class="form-group">
@@ -236,6 +221,7 @@
     </div>
 </div>
 
+<!-- POS 新增訂單 Modal -->
 <div class="modal-overlay" id="posModal">
     <div class="modal-content">
         <div class="modal-header">
@@ -248,7 +234,7 @@
         </div>
         <div class="form-group">
             <label>取貨日期</label>
-            <select id="posPickupDate" required>
+            <select id="posPickupDate" required onchange="syncTimeOptions('posPickupDate','posPickupTime')">
                 <option value="">請選擇取貨日期</option>
                 <option value="2027-02-04">2027 年 02 月 04 日（除夕）</option>
                 <option value="2027-02-05">2027 年 02 月 05 日（初一）</option>
@@ -257,11 +243,7 @@
         <div class="form-group">
             <label>取貨時間</label>
             <select id="posPickupTime" required>
-                <option value="">請選擇取貨時間</option>
-                <option value="12:00">12:00</option>
-                <option value="13:00">13:00</option>
-                <option value="14:00">14:00</option>
-                <option value="15:30">15:30</option>
+                <option value="">請先選擇日期</option>
             </select>
         </div>
         <div class="form-group">
@@ -308,27 +290,87 @@
 //  全域常數 & 狀態
 // ══════════════════════════════════════════════════════════
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwWPu_pZsN9EoFVYJmyUhndaj6IfO2ekHi1jnB7lJMO2I0MDemfZSNWlDkiQUIyUK8u/exec';
+
+/* 【修改5】清蒸臭豆腐 index=6；【修改6】新增松露蘿蔔糕 index=21
+   ※ 索引對應 Google Sheet 欄位：
+     index 0-15  → H-W 欄（共16格）
+     index 16-20 → Y-AC 欄（共5格，松露油飯~酥香蘿蔔糕）
+     index 21    → X 欄（原空白，現改為「松露蘿蔔糕」）
+   請記得在 Sheet 第1列把 X 欄標題改為「松露蘿蔔糕」         */
 const menuItems = [
-    {name:"祥和拼盤",price:800},{name:"佛跳牆",price:1380},{name:"肉骨茶鍋",price:1380},
-    {name:"酸白菜鍋",price:860},{name:"麻油鍋",price:860},{name:"紅燒獅子頭",price:640},
-    {name:"清蒸臭豆腐",price:640},{name:"麻辣臭豆腐",price:600},{name:"三杯猴頭菇",price:760},
-    {name:"宮保素雞丁",price:600},{name:"糖醋素肉",price:600},{name:"素杏鮑牛腩煲",price:720},
-    {name:"酸白菜素牛肉",price:560},{name:"麻油素腰花",price:760},{name:"蓉城口水雞",price:760},
-    {name:"祥和素油雞",price:640},{name:"松露油飯",price:380},{name:"椒麻油飯",price:300},
-    {name:"炒炊粉",price:180},{name:"原味蘿蔔糕",price:200},{name:"酥香蘿蔔糕",price:280}
+    {name:"祥和拼盤",  price:800},  // 0
+    {name:"佛跳牆",    price:1380}, // 1
+    {name:"肉骨茶鍋",  price:1380}, // 2
+    {name:"酸白菜鍋",  price:860},  // 3
+    {name:"麻油鍋",    price:860},  // 4
+    {name:"紅燒獅子頭",price:640},  // 5
+    {name:"清蒸臭豆腐",price:640},  // 6 ← 【修改5】有辣度選項
+    {name:"麻辣臭豆腐",price:600},  // 7
+    {name:"三杯猴頭菇",price:760},  // 8
+    {name:"宮保素雞丁",price:600},  // 9
+    {name:"糖醋素肉",  price:600},  // 10
+    {name:"素杏鮑牛腩煲",price:720},// 11
+    {name:"酸白菜素牛肉",price:560},// 12
+    {name:"麻油素腰花",price:760},  // 13
+    {name:"蓉城口水雞",price:760},  // 14
+    {name:"祥和素油雞",price:640},  // 15
+    {name:"松露油飯",  price:380},  // 16
+    {name:"椒麻油飯",  price:300},  // 17
+    {name:"炒炊粉",    price:180},  // 18
+    {name:"原味蘿蔔糕",price:200},  // 19
+    {name:"酥香蘿蔔糕",price:280},  // 20
+    {name:"松露蘿蔔糕",price:380}   // 21 ← 【修改6】新菜色，對應 Sheet X 欄
 ];
-const STATUS_COLOR = {
-    '付清':'#2e7d32', '付訂金':'#e65100', '未付':'#d32f2f',
-    '退款待處理':'#1565c0', '已取消':'#999'
+
+/* 【修改4】各日期對應可選取貨時間
+   2027-02-04（除夕）：僅 12:00
+   2027-02-05（初一）：12:00 / 13:00 / 14:00 / 15:30          */
+const PICKUP_TIME_MAP = {
+    '2027-02-04': ['12:00'],
+    '2027-02-05': ['12:00','13:00','14:00','15:30']
 };
-let total = 0, qty = new Array(menuItems.length).fill(0);
+
+const STATUS_COLOR = {
+    '付清':'#2e7d32','付訂金':'#e65100','未付':'#d32f2f',
+    '退款待處理':'#1565c0','已取消':'#999'
+};
+
+let total = 0;
+let qty   = new Array(menuItems.length).fill(0); // 長度現為 22（含松露蘿蔔糕）
 let lastOrder = null, action = 'new', posPayMode = 'none', editPayMode = 'none';
 let isPosMode = false, isEditMode = false;
 let currentEditOrder = null;
 let allOrders = [];
 
+// 【修改5】清蒸臭豆腐辣度（預設不辣）
+let stinkTofuSpice = '不辣';
+
 // ══════════════════════════════════════════════════════════
-//  通用驗證表單函式
+//  【修改4】動態取貨時間選單
+// ══════════════════════════════════════════════════════════
+function syncTimeOptions(dateElId, timeElId, presetTime) {
+    const date = document.getElementById(dateElId).value;
+    const sel  = document.getElementById(timeElId);
+    const times = PICKUP_TIME_MAP[date] || [];
+    sel.innerHTML = '<option value="">請選擇取貨時間</option>' +
+        times.map(t => `<option value="${t}">${t}</option>`).join('');
+    // 若只有一個時段，自動選取
+    if (times.length === 1) sel.value = times[0];
+    // 若有預填時間，嘗試還原
+    if (presetTime && times.includes(presetTime)) sel.value = presetTime;
+}
+
+// ══════════════════════════════════════════════════════════
+//  【修改1】取貨日前10天限制
+// ══════════════════════════════════════════════════════════
+function daysUntilPickup(dateStr) {
+    if (!dateStr) return 999;
+    const pickup = new Date(dateStr + 'T00:00:00+08:00');
+    return Math.ceil((pickup - Date.now()) / 86400000);
+}
+
+// ══════════════════════════════════════════════════════════
+//  通用驗證表單
 // ══════════════════════════════════════════════════════════
 function validateOrderForm(name, phone, date, time) {
     if (!name || !phone || !date || !time) {
@@ -352,7 +394,7 @@ function validateOrderForm(name, phone, date, time) {
     if (isPosMode) {
         document.getElementById('headerTitle').innerHTML = '祥和蔬食料理 - 年菜預購 <span class="pos-badge">門市POS</span>';
         document.getElementById('headerActions').style.display = 'flex';
-        showMenu(); // 移除讀取庫存，直接顯示菜單
+        showMenu();
     } else {
         const script = document.createElement('script');
         script.src = 'https://static.line-scdn.net/liff/edge/2/sdk.js';
@@ -375,9 +417,9 @@ function loadWithHistory() {
         .then(res => {
             if (res.lastOrder) {
                 lastOrder = res.lastOrder;
-                const diff = Math.ceil((new Date(lastOrder.date) - new Date()) / 86400000);
-                if (diff <= 3) {
-                    alert('您有一筆近期訂單（3天內取貨），已進入備餐階段無法線上修改。\n如需更改請致電門市。您仍可建立新訂單。');
+                // 【修改1】取貨日前10天不可再加購/減購
+                if (daysUntilPickup(lastOrder.date) <= 10) {
+                    alert('您的訂單取貨日前10天內無法線上加購或減購。\n如需更改請致電門市。您仍可建立新訂單。');
                     startEdit(false);
                 } else {
                     document.getElementById('choiceModal').style.display = 'flex';
@@ -392,13 +434,18 @@ function startEdit(isEdit) {
     document.getElementById('choiceModal').style.display = 'none';
     if (isEdit) {
         action = 'update';
-        const h = lastOrder.items;
-        qty = h.slice(0, 16).concat(h.slice(17, 22)).map(v => parseInt(v) || 0);
-        document.getElementById('custName').value   = lastOrder.name;
-        // 讀取電話時過濾掉單引號 (防止 Google Sheet 自動去 0 而加的標記)
-        document.getElementById('custPhone').value  = (lastOrder.phone || '').toString().replace(/^'/, '');
+        const h = lastOrder.items; // 長度 22：h[0..15]=H-W, h[16]=X(松露蘿蔔糕), h[17..21]=Y-AC
+        // 【修改6】重新對應 qty 陣列順序（menuItems 順序）
+        // qty[0..15]  ← h[0..15]
+        // qty[16..20] ← h[17..21]（Y-AC = 松露油飯~酥香蘿蔔糕）
+        // qty[21]     ← h[16]    （X 欄 = 松露蘿蔔糕）
+        qty = h.slice(0,16).concat(h.slice(17,22)).concat([Number(h[16])||0]).map(v=>parseInt(v)||0);
+        document.getElementById('custName').value  = lastOrder.name;
+        document.getElementById('custPhone').value = lastOrder.phone;
+        // 【修改4】預填時也要同步時間選單
+        syncTimeOptions('pickupDate','pickupTime', lastOrder.time);
         document.getElementById('pickupDate').value = lastOrder.date;
-        document.getElementById('pickupTime').value = lastOrder.time || '';
+        syncTimeOptions('pickupDate','pickupTime', lastOrder.time);
         if (lastOrder.paymentStatus && lastOrder.paymentStatus !== '未付') {
             document.getElementById('paidNotice').style.display = 'block';
         }
@@ -426,16 +473,29 @@ function renderMenu() {
         const q = qty[i] || 0;
         const div = document.createElement('div');
         div.className = 'menu-item';
+
+        // 【修改5】清蒸臭豆腐（index 6）加辣度選項
+        const spiceHtml = (i === 6) ? `
+            <div class="spice-row">
+                辣度：
+                <label><input type="radio" name="spice6" value="不辣"
+                    ${stinkTofuSpice==='不辣'?'checked':''} onchange="stinkTofuSpice=this.value"> 不辣</label>
+                <label><input type="radio" name="spice6" value="小辣"
+                    ${stinkTofuSpice==='小辣'?'checked':''} onchange="stinkTofuSpice=this.value"> 小辣</label>
+            </div>` : '';
+
         const ctrl = `<div class="qty-controls">
-                 <button class="qty-btn" onclick="upd(${i},-1)">-</button>
-                 <input class="qty-input" id="q${i}" value="${q}" readonly>
-                 <button class="qty-btn" onclick="upd(${i},1)">+</button>
-               </div>`;
+            <button class="qty-btn" onclick="upd(${i},-1)">-</button>
+            <input class="qty-input" id="q${i}" value="${q}" readonly>
+            <button class="qty-btn" onclick="upd(${i},1)">+</button>
+        </div>`;
+
         div.innerHTML = `
             <img src="https://via.placeholder.com/80?text=圖片" alt="${item.name}">
             <div class="menu-item-info">
                 <div class="menu-item-title">${item.name}</div>
                 <div class="menu-item-price">NT$ ${item.price}</div>
+                ${spiceHtml}
             </div>${ctrl}`;
         c.appendChild(div);
     });
@@ -462,14 +522,14 @@ function calcTotal() {
 // ══════════════════════════════════════════════════════════
 function selPay(mode) {
     posPayMode = mode;
-    ['none', 'deposit', 'full'].forEach((m, i) => {
-        document.getElementById('pBtn' + i).classList.toggle('sel', m === mode);
+    ['none','deposit','full'].forEach((m,i) => {
+        document.getElementById('pBtn'+i).classList.toggle('sel', m===mode);
     });
-    document.getElementById('depWrap').classList.toggle('show', mode === 'deposit');
+    document.getElementById('depWrap').classList.toggle('show', mode==='deposit');
 }
 
 function updatePosSummary() {
-    const items = menuItems.map((item, i) => qty[i] > 0 ? `${item.name} × ${qty[i]}` : null).filter(Boolean);
+    const items = menuItems.map((item,i) => qty[i]>0 ? `${item.name} × ${qty[i]}` : null).filter(Boolean);
     document.getElementById('summaryItems').innerHTML = items.join('<br>') || '（尚未選擇）';
     document.getElementById('summaryTotal').innerText = '總金額：NT$ ' + total;
     document.getElementById('posSummary').style.display = 'block';
@@ -484,62 +544,60 @@ function openPosModal() {
 
 function submitPosOrder() {
     if (total <= 0) { alert('餐點數量全為 0，請先選擇餐點！'); return; }
-    
     const name  = document.getElementById('posCustName').value.trim();
     const phone = document.getElementById('posCustPhone').value.trim();
     const date  = document.getElementById('posPickupDate').value;
     const time  = document.getElementById('posPickupTime').value;
+    if (!validateOrderForm(name, phone, date, time)) return;
 
-    if (!validateOrderForm(name, phone, date, time)) return; 
-
-    let depAmt = 0, payStatus = '未付';
-    if (posPayMode === 'full') {
-        payStatus = '付清'; depAmt = total;
-    } else if (posPayMode === 'deposit') {
-        depAmt = parseInt(document.getElementById('depositAmt').value) || 0;
-        if (depAmt <= 0) { alert('請輸入訂金金額！'); return; }
-        if (depAmt >= total) { alert('訂金不可大於等於總金額，全付請選「全額付清」！'); return; }
+    let depAmt=0, payStatus='未付';
+    if (posPayMode==='full')    { payStatus='付清'; depAmt=total; }
+    else if (posPayMode==='deposit') {
+        depAmt = parseInt(document.getElementById('depositAmt').value)||0;
+        if (depAmt<=0)       { alert('請輸入訂金金額！'); return; }
+        if (depAmt>=total)   { alert('訂金不可大於等於總金額，全付請選「全額付清」！'); return; }
         payStatus = '付訂金';
     }
 
-    setBtnState('posSubmitBtn', '建立中...', true);
+    // 【修改5】辣度備註
+    const spiceNote = qty[6]>0 ? `清蒸臭豆腐：${stinkTofuSpice}` : '';
+
+    setBtnState('posSubmitBtn','建立中...',true);
     fetch(GAS_URL, {
-        method: 'POST', mode: 'no-cors',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            userId: 'POS_STORE', action: 'new', orderId: null,
-            name: name,
-            phone: "'" + phone, // 加上單引號強制轉字串，防止0被吃掉
-            branch: '鎮江店', date: date, time: time,
-            totalAmount: total, items_qty_array: qty,
-            source: 'POS', payStatus: payStatus, depositAmount: depAmt
+        method:'POST', mode:'no-cors',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+            userId:'POS_STORE', action:'new', orderId:null,
+            name, phone, branch:'鎮江店', date, time,
+            totalAmount:total, items_qty_array:qty,
+            source:'POS', payStatus, depositAmount:depAmt,
+            spiceNote
         })
-    }).then(() => {
-        alert(`門市訂單已建立！\n顧客：${name}\n狀態：${payStatus}` +
-              (depAmt > 0 && payStatus !== '付清' ? `\n訂金：NT$ ${depAmt}` : ''));
+    }).then(()=>{
+        alert(`門市訂單已建立！\n顧客：${name}\n狀態：${payStatus}`+
+              (depAmt>0&&payStatus!=='付清'?`\n訂金：NT$ ${depAmt}`:''));
         closeModal('posModal');
         resetPosForm();
-    }).catch(() => alert('建立失敗，請稍後再試。'))
-      .finally(() => setBtnState('posSubmitBtn', '✅ 建立門市訂單', false));
+    }).catch(()=>alert('建立失敗，請稍後再試。'))
+      .finally(()=>setBtnState('posSubmitBtn','✅ 建立門市訂單',false));
 }
 
 // ══════════════════════════════════════════════════════════
 //  POS：訂單管理（搜尋 + 列表）
 // ══════════════════════════════════════════════════════════
 async function openSearchModal() {
-    document.getElementById('searchPhone').value = '';
-    document.getElementById('searchStatus').innerText = '載入訂單中...';
-    document.getElementById('searchResults').innerHTML = '';
-    document.getElementById('searchModal').style.display = 'flex';
-
+    document.getElementById('searchPhone').value='';
+    document.getElementById('searchStatus').innerText='載入訂單中...';
+    document.getElementById('searchResults').innerHTML='';
+    document.getElementById('searchModal').style.display='flex';
     try {
-        const res  = await fetch(GAS_URL + '?posListAll=1');
+        const res  = await fetch(GAS_URL+'?posListAll=1');
         const data = await res.json();
         allOrders  = data.orders || [];
         renderOrderList(allOrders);
-        document.getElementById('searchStatus').innerText = `共 ${allOrders.length} 筆訂單`;
-    } catch (e) {
-        document.getElementById('searchStatus').innerText = '⚠️ 載入失敗，請關閉後重試';
+        document.getElementById('searchStatus').innerText=`共 ${allOrders.length} 筆訂單`;
+    } catch(e) {
+        document.getElementById('searchStatus').innerText='⚠️ 載入失敗，請關閉後重試';
     }
 }
 
@@ -547,30 +605,33 @@ function doSearch() {
     const last3 = document.getElementById('searchPhone').value.trim();
     if (!last3) {
         renderOrderList(allOrders);
-        document.getElementById('searchStatus').innerText = `共 ${allOrders.length} 筆訂單`;
+        document.getElementById('searchStatus').innerText=`共 ${allOrders.length} 筆訂單`;
         return;
     }
-    const filtered = allOrders.filter(o => {
-        // 加入過濾掉開頭可能的單引號
-        const p = String(o.phone || '').replace(/[\s\-']/g, '');
+    const filtered = allOrders.filter(o=>{
+        const p = String(o.phone||'').replace(/[\s\-]/g,'');
         return p.endsWith(last3);
     });
     document.getElementById('searchStatus').innerText =
-        filtered.length > 0 ? `末三碼「${last3}」找到 ${filtered.length} 筆` : `末三碼「${last3}」查無結果`;
+        filtered.length>0?`末三碼「${last3}」找到 ${filtered.length} 筆`:`末三碼「${last3}」查無結果`;
     renderOrderList(filtered);
 }
 
 function renderOrderList(orders) {
     const container = document.getElementById('searchResults');
     if (!orders.length) {
-        container.innerHTML = '<p style="text-align:center;color:#bbb;padding:24px 0;font-size:.95em;">沒有符合的訂單</p>';
+        container.innerHTML='<p style="text-align:center;color:#bbb;padding:24px 0;font-size:.95em;">沒有符合的訂單</p>';
         return;
     }
-    container.innerHTML = orders.map(o => {
-        const color = STATUS_COLOR[o.status] || '#666';
-        // 過濾掉可能儲存的單引號
-        const phoneTail = o.phone ? '末四碼 ' + String(o.phone).replace(/[\s\-']/g,'').slice(-4) : '';
-        const paidInfo  = o.paid > 0 ? `　已付：NT$ ${o.paid}` : '';
+    container.innerHTML = orders.map(o=>{
+        const color    = STATUS_COLOR[o.status]||'#666';
+        const phoneTail= o.phone?'末四碼 '+String(o.phone).replace(/[\s\-]/g,'').slice(-4):'';
+        const paidInfo = o.paid>0?`　已付：NT$ ${o.paid}`:'';
+        // 【修改1】取貨日前10天顯示鎖定
+        const locked   = daysUntilPickup(o.date) <= 10;
+        const editBtn  = locked
+            ? `<button class="btn-edit" style="background:#aaa;cursor:default;" disabled title="取貨日前10天無法修改">🔒 已鎖定</button>`
+            : `<button class="btn-edit" onclick='doEditOrder(${JSON.stringify(o).replace(/'/g,"&#39;")})'>✏️ 編輯</button>`;
         return `<div class="order-card">
             <div class="order-card-top">
                 <div>
@@ -581,257 +642,273 @@ function renderOrderList(orders) {
             </div>
             <div class="order-card-amount">💰 總額：NT$ ${o.total}${paidInfo}</div>
             <div class="order-card-actions">
-                <button class="btn-edit" onclick='doEditOrder(${JSON.stringify(o).replace(/'/g,"&#39;")})'>✏️ 編輯</button>
+                ${editBtn}
                 <button class="btn-hide" onclick="confirmHideOrder('${o.orderId}','${escHtml(o.name)}')">🗑 隱藏</button>
             </div>
         </div>`;
     }).join('');
 }
 
-// ── 編輯：第一步 ── 載入數量回菜單
+// ── 編輯第一步：載入數量回菜單
 function doEditOrder(order) {
+    // 【修改1】取貨日前10天禁止修改
+    if (daysUntilPickup(order.date) <= 10) {
+        alert(`⚠️ 訂單 #${order.orderId} 的取貨日前10天內無法加購或減購！\n取貨日：${order.date}\n如需調整請直接聯繫顧客或於試算表手動修改。`);
+        return;
+    }
+
     currentEditOrder = order;
     isEditMode = true;
     closeModal('searchModal');
-    
-    const items = order.items;
-    qty = items.slice(0, 16).concat(items.slice(17, 22)).map(v => parseInt(v) || 0);
+
+    const items = order.items; // 22 個元素：items[0..15]=H-W, items[16]=X欄(松露蘿蔔糕), items[17..21]=Y-AC
+    // 【修改6】對應回 menuItems 順序（qty[21] = 松露蘿蔔糕 = items[16]）
+    qty = items.slice(0,16)
+               .concat(items.slice(17,22))
+               .concat([Number(items[16])||0])
+               .map(v=>parseInt(v)||0);
     renderMenu();
-    
-    document.getElementById('editBanner').style.display = 'block';
-    document.getElementById('editBannerText').innerText = `✏️ 編輯模式 — 訂單 #${order.orderId}（${order.name}）`;
-    
+
+    document.getElementById('editBanner').style.display='block';
+    document.getElementById('editBannerText').innerText=`✏️ 編輯模式 — 訂單 #${order.orderId}（${order.name}）`;
+
     const cartBar = document.getElementById('cartBar');
     cartBar.classList.add('show');
     cartBar.onclick = openEditInfoModal;
     const btn = document.getElementById('cartBtnText');
-    btn.innerText = '下一步：填寫資訊 ➔';
-    btn.className = 'cart-btn-text blue';
-
+    btn.innerText='下一步：填寫資訊 ➔';
+    btn.className='cart-btn-text blue';
     calcTotal();
 }
 
-// POS 加訂付款模式切換
+// POS 加訂收款模式切換
 function selEditPay(mode) {
     editPayMode = mode;
-    ['none', 'deposit', 'full'].forEach((m, i) => {
-        document.getElementById('epBtn' + i).classList.toggle('sel', m === mode);
+    ['none','deposit','full'].forEach((m,i)=>{
+        document.getElementById('epBtn'+i).classList.toggle('sel',m===mode);
     });
-    document.getElementById('editDepWrap').classList.toggle('show', mode === 'deposit');
+    document.getElementById('editDepWrap').classList.toggle('show',mode==='deposit');
 }
 
-// ── 編輯：第二步 ── 填寫訂購資訊
+// ── 編輯第二步：填寫訂購資訊 Modal
 function openEditInfoModal() {
-    if (total <= 0) { alert('餐點數量全為 0，請先選擇餐點！'); return; }
+    if (total<=0) { alert('餐點數量全為 0，請先選擇餐點！'); return; }
 
-    const o = currentEditOrder;
-    document.getElementById('editInfoTitle').innerText = `✏️ 修改訂單 #${o.orderId}`;
-    
-    const newT = total, oldT = Number(o.total) || 0;
-    const oldPaid = Number(o.paid) || 0;
-    let diffNote = '';
-    
-    if (newT > oldT) diffNote = `<br>🔺 追加差額：<strong style="color:#e65100;">NT$ ${newT - oldT}</strong>`;
-    else if (newT < oldT) diffNote = `<br>🔻 減少金額：<strong style="color:#1565c0;">NT$ ${oldT - newT}</strong>（將通知員工退款）`;
-    
-    // 檢查退款待處理且加購的情形，顯示紅色提醒文字
-    let showPosPayment = (o.source === 'POS' && newT > oldT);
-    if (o.status === '退款待處理' && newT > oldPaid) {
-        diffNote += `<br><span style="color:red; font-weight:bold;">🔔 提醒：請提醒消費者於取貨時補足差額 NT$ ${newT - oldPaid}</span>`;
-        // 把現場未付金額清空，隱藏當下的 POS 結帳區塊，單純做為提醒
-        showPosPayment = false;
+    const o      = currentEditOrder;
+    const newT   = total;
+    const oldT   = Number(o.total)||0;
+    const oldPaid= Number(o.paid)||0;
+    const oldSt  = String(o.status||'');
+
+    document.getElementById('editInfoTitle').innerText=`✏️ 修改訂單 #${o.orderId}`;
+
+    // ── 差額說明 ──
+    let diffNote='';
+    // 【修改1】退款待處理 + 加購總金額 > 已付金額 → 需員工審核
+    if (oldSt==='退款待處理' && newT > oldPaid) {
+        const needPay   = newT - oldPaid;
+        const oldRefund = Math.abs(Number(o.unpaid)||0);
+        diffNote = `<br>🔄 此訂單原為退款待處理（待退 NT$ ${oldRefund}）`+
+                   `<br>🔺 加購後需補繳：<strong style="color:#e65100;">NT$ ${needPay}</strong>`+
+                   `<br><span style="color:#7b1fa2;font-weight:bold;">⚠️ 將傳送員工LINE審核，同意後方可成立</span>`;
+    } else if (newT>oldT) {
+        diffNote=`<br>🔺 追加差額：<strong style="color:#e65100;">NT$ ${newT-oldT}</strong>`;
+    } else if (newT<oldT) {
+        // 【修改2】少訂 → 退款，功能維持原樣
+        diffNote=`<br>🔻 減少金額：<strong style="color:#1565c0;">NT$ ${oldT-newT}</strong>（將通知員工退款）`;
     }
 
-    document.getElementById('editInfoSummary').innerHTML =
-        `顧客：<strong>${o.name}</strong><br>` +
+    document.getElementById('editInfoSummary').innerHTML=
+        `顧客：<strong>${o.name}</strong><br>`+
         `原金額：NT$ ${oldT} → 新金額：<strong style="color:#8b0000;">NT$ ${newT}</strong>${diffNote}`;
 
-    if (showPosPayment) {
+    // ── POS 現場收款區塊（一般加訂，非退款轉加訂）──
+    const isRefundAdd = (oldSt==='退款待處理' && newT>oldPaid);
+    if (o.source==='POS' && newT>oldT && !isRefundAdd) {
         const newUnpaid = newT - oldPaid;
-        document.getElementById('editPaymentSection').style.display = 'block';
-        document.getElementById('editPaymentTitle').innerText = `💰 待收金額：NT$ ${newUnpaid}`;
+        document.getElementById('editPaymentSection').style.display='block';
+        document.getElementById('editPaymentTitle').innerText=`💰 待收金額：NT$ ${newUnpaid}`;
         selEditPay('none');
     } else {
-        document.getElementById('editPaymentSection').style.display = 'none';
-        editPayMode = 'none';
+        document.getElementById('editPaymentSection').style.display='none';
+        editPayMode='none';
     }
 
-    // 預填欄位
-    document.getElementById('editPickupDate').value = o.date  || '';
-    
-    const timeSelect = document.getElementById('editPickupTime');
-    timeSelect.value = o.time || '';
-    if (!timeSelect.value && o.time) timeSelect.value = '12:00'; // Fallback
-    
-    document.getElementById('editCustName').value   = o.name  || '';
-    // 顯示時過濾單引號
-    document.getElementById('editCustPhone').value  = (o.phone || '').toString().replace(/^'/, '');
+    // 【修改4】預填日期並同步時間選單
+    document.getElementById('editPickupDate').value = o.date||'';
+    syncTimeOptions('editPickupDate','editPickupTime', o.time||'');
+    document.getElementById('editCustName').value  = o.name||'';
+    document.getElementById('editCustPhone').value = o.phone||'';
 
-    document.getElementById('editInfoModal').style.display = 'flex';
+    document.getElementById('editInfoModal').style.display='flex';
 }
 
-// ── 編輯：送出修改
+// ── 編輯第三步：送出修改
 function submitEditOrder() {
     const name  = document.getElementById('editCustName').value.trim();
     const phone = document.getElementById('editCustPhone').value.trim();
     const date  = document.getElementById('editPickupDate').value;
     const time  = document.getElementById('editPickupTime').value;
+    if (!validateOrderForm(name,phone,date,time)) return;
 
-    if (!validateOrderForm(name, phone, date, time)) return;
+    const o       = currentEditOrder;
+    const newT    = total;
+    const oldT    = Number(o.total)||0;
+    const oldPaid = Number(o.paid)||0;
+    const oldSt   = String(o.status||'');
 
-    const o = currentEditOrder;
-    const newT = total, oldT = Number(o.total) || 0;
-    const oldPaid = Number(o.paid) || 0;
-    
-    let posCollectedAmt = 0;
-    let posEditMode = false;
-    let finalPayStatus = o.status;
+    // 【修改1】退款待處理 + 新金額 > 已付 → 傳送員工審核旗標
+    const isRefundAdd = (oldSt==='退款待處理' && newT>oldPaid);
 
-    if (document.getElementById('editPaymentSection').style.display === 'block') {
-        posEditMode = true;
+    let posCollectedAmt=0, posEditMode=false;
+    if (!isRefundAdd && document.getElementById('editPaymentSection').style.display==='block') {
+        posEditMode=true;
         const newUnpaid = newT - oldPaid;
-        if (editPayMode === 'full') {
+        if (editPayMode==='full') {
             posCollectedAmt = newUnpaid;
-        } else if (editPayMode === 'deposit') {
-            posCollectedAmt = parseInt(document.getElementById('editDepositAmt').value) || 0;
-            if (posCollectedAmt <= 0) { alert('請輸入收取金額！'); return; }
-            if (posCollectedAmt >= newUnpaid) { alert('收取金額不可大於等於待收餘額，全付請選「全額付清」！'); return; }
+        } else if (editPayMode==='deposit') {
+            posCollectedAmt = parseInt(document.getElementById('editDepositAmt').value)||0;
+            if (posCollectedAmt<=0)          { alert('請輸入收取金額！'); return; }
+            if (posCollectedAmt>=newUnpaid)  { alert('收取金額不可大於等於待收餘額，全付請選「全額付清」！'); return; }
         }
     }
 
-    // 若原先是退款待處理，且加購金額超過原本已付，則重置狀態
-    if (o.status === '退款待處理' && newT > oldPaid) {
-        alert(`🔔 此訂單原為「退款待處理」，加購後總額已大於已付金額。\n請提醒消費者補足差額：NT$ ${newT - oldPaid}`);
-        // 狀態轉正，不再是退款待處理 (若原先有付過款就標示付訂金，完全沒付就標未付)
-        finalPayStatus = oldPaid > 0 ? '付訂金' : '未付';
-        posEditMode = false;
-        posCollectedAmt = 0;
+    let modDesc;
+    if (isRefundAdd) {
+        modDesc=`退款訂單加購（需員工審核），補繳差額 NT$ ${newT-oldPaid}`;
+    } else if (newT===oldT) {
+        modDesc='金額不變，更新內容';
+    } else if (newT>oldT) {
+        modDesc=`加訂，需追加 NT$ ${newT-oldT}`;
+    } else {
+        modDesc=`少訂，需退款 NT$ ${oldT-newT}`;
     }
 
-    const modDesc = newT === oldT ? '金額不變，更新內容' :
-        newT > oldT ? `加訂，需追加 NT$ ${newT - oldT}` : `少訂，需退款 NT$ ${oldT - newT}`;
-    
     if (!confirm(`確認修改訂單 #${o.orderId}？\n顧客：${name}\n${modDesc}`)) return;
 
-    setBtnState('editSubmitBtn', '送出中...', true);
+    // 【修改5】辣度備註
+    const spiceNote = qty[6]>0 ? `清蒸臭豆腐：${stinkTofuSpice}` : '';
+
+    setBtnState('editSubmitBtn','送出中...',true);
     fetch(GAS_URL, {
-        method: 'POST', mode: 'no-cors',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            userId: o.lineId || 'POS_STORE',
-            action: 'update',
-            orderId: o.orderId,
-            name: name,
-            phone: "'" + phone, // 加上單引號強制轉字串
-            branch: '鎮江店', date: date, time: time,
-            totalAmount: newT,
+        method:'POST', mode:'no-cors',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+            userId:       o.lineId||'POS_STORE',
+            action:       'update',
+            orderId:      o.orderId,
+            name, phone, branch:'鎮江店', date, time,
+            totalAmount:  newT,
             items_qty_array: qty,
-            source: 'POS',
-            payStatus: finalPayStatus, // 寫入修正後的狀態
-            posEditMode: posEditMode,
-            posCollectedAmt: posCollectedAmt
+            source:       'POS',
+            payStatus:    o.status,
+            posEditMode,
+            posCollectedAmt,
+            fromRefundStatus: isRefundAdd,  // 【修改1】傳遞旗標給後端
+            spiceNote
         })
-    }).then(() => {
-        alert('訂單修改成功！');
+    }).then(()=>{
+        const idx=allOrders.findIndex(x=>String(x.orderId)===String(o.orderId));
+        if (idx!==-1) allOrders[idx]={...allOrders[idx],name,phone,date,time,total:newT,paid:oldPaid+posCollectedAmt};
+        if (isRefundAdd) {
+            alert(`加購申請已送出！\n員工收到 LINE 通知後審核，\n同意後顧客將收到補繳差額通知。`);
+        } else {
+            alert(`訂單 #${o.orderId} 修改完成！\n${modDesc}`);
+        }
         closeModal('editInfoModal');
         exitEditMode();
-        if (document.getElementById('searchModal').style.display === 'flex') {
-            openSearchModal(); // 重整訂單列表
-        }
-    }).catch(() => alert('修改失敗，請稍後再試。'))
-      .finally(() => setBtnState('editSubmitBtn', '✅ 確認修改訂單', false));
+    }).catch(()=>alert('送出失敗，請稍後再試。'))
+      .finally(()=>setBtnState('editSubmitBtn','✅ 確認修改訂單',false));
 }
 
-// ── 購物車與一般下單邏輯 (補齊) ──
+// ── 取消編輯
+function exitEditMode() {
+    isEditMode=false; currentEditOrder=null;
+    document.getElementById('editBanner').style.display='none';
+    const cartBar=document.getElementById('cartBar');
+    cartBar.classList.remove('show');
+    cartBar.onclick=openCart;
+    const btn=document.getElementById('cartBtnText');
+    btn.innerText='填寫訂單 ➔';
+    btn.className='cart-btn-text';
+    resetMenuState();
+}
+
+// ── 隱藏訂單
+function confirmHideOrder(orderId,name) {
+    if (!confirm(`確認隱藏訂單 #${orderId}（${name}）？\n\n此操作不會永久刪除，\n可在 Google Sheet 中將 G 欄狀態改回「未付」復原。`)) return;
+    fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'hide',orderId,source:'POS'})
+    }).then(()=>{
+        allOrders=allOrders.filter(o=>String(o.orderId)!==String(orderId));
+        doSearch();
+        alert(`訂單 #${orderId} 已隱藏。`);
+    }).catch(()=>alert('操作失敗，請稍後再試。'));
+}
+
+// ══════════════════════════════════════════════════════════
+//  一般顧客訂單（LIFF）
+// ══════════════════════════════════════════════════════════
 function openCart() {
-    if (total <= 0 || document.getElementById('cartBar').classList.contains('disabled')) return;
-    if (isEditMode) { openEditInfoModal(); return; }
-    document.getElementById('orderModal').style.display = 'flex';
+    if (total>0) document.getElementById('orderModal').style.display='flex';
+    else alert('購物車是空的，請先選擇餐點唷！');
 }
 
 function submitOrder() {
+    if (total<=0) { alert('餐點數量全為 0，請先選擇餐點！'); return; }
+
+    // 【修改1】LIFF 修改訂單：取貨日前10天禁止
+    if (action==='update' && lastOrder && daysUntilPickup(lastOrder.date)<=10) {
+        alert('您的訂單取貨日前10天內無法線上加購或減購。\n如需修改請致電門市，謝謝！');
+        return;
+    }
+
     const name  = document.getElementById('custName').value.trim();
     const phone = document.getElementById('custPhone').value.trim();
     const date  = document.getElementById('pickupDate').value;
     const time  = document.getElementById('pickupTime').value;
+    if (!validateOrderForm(name,phone,date,time)) return;
 
-    if (!validateOrderForm(name, phone, date, time)) return;
+    const spiceNote = qty[6]>0 ? `清蒸臭豆腐：${stinkTofuSpice}` : '';
 
-    setBtnState('submitBtn', '送出中...', true);
-    fetch(GAS_URL, {
-        method: 'POST', mode: 'no-cors',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            userId: lastOrder ? lastOrder.lineId : (window.liff && liff.isLoggedIn() ? liff.getDecodedIDToken().sub : 'UNKNOWN'),
-            action: action,
-            orderId: action === 'update' ? lastOrder.orderId : null,
-            name: name,
-            phone: "'" + phone, // 加上單引號強制轉字串
-            branch: '鎮江店', date: date, time: time,
-            totalAmount: total, items_qty_array: qty,
-            source: 'LINE'
-        })
-    }).then(() => {
-        alert(action === 'update' ? '訂單修改成功！' : '訂單建立成功！');
-        closeModal('orderModal');
-        if (window.liff) liff.closeWindow();
-    }).catch(() => alert('送出失敗，請稍後再試。'))
-      .finally(() => setBtnState('submitBtn', '確認送出訂單', false));
-}
-
-function closeModal(id) { document.getElementById(id).style.display = 'none'; }
-
-function exitEditMode() {
-    isEditMode = false;
-    currentEditOrder = null;
-    document.getElementById('editBanner').style.display = 'none';
-    qty.fill(0);
-    renderMenu();
-    calcTotal();
-    const cartBar = document.getElementById('cartBar');
-    cartBar.onclick = openCart;
-    const btn = document.getElementById('cartBtnText');
-    btn.innerText = '填寫訂單 ➔';
-    btn.className = 'cart-btn-text';
-    if (isPosMode) {
-        cartBar.classList.remove('show');
-    }
-}
-
-function resetPosForm() {
-    document.getElementById('posCustName').value = '';
-    document.getElementById('posCustPhone').value = '';
-    document.getElementById('posPickupDate').value = '';
-    document.getElementById('posPickupTime').value = '';
-    qty.fill(0);
-    renderMenu();
-    calcTotal();
-    document.getElementById('posSummary').style.display = 'none';
-}
-
-function setBtnState(id, text, disabled) {
-    const btn = document.getElementById(id);
-    btn.innerText = text;
-    btn.disabled = disabled;
-}
-
-function confirmHideOrder(orderId, name) {
-    if (!confirm(`確定要隱藏訂單 #${orderId} (${name}) 嗎？\n(隱藏後將不會出現在列表)`)) return;
-    fetch(GAS_URL, {
-        method: 'POST', mode: 'no-cors',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ action: 'hide', orderId: orderId })
-    }).then(() => {
-        alert('訂單已隱藏');
-        openSearchModal();
+    setBtnState('submitBtn','訂單傳送中...',true);
+    liff.getProfile().then(profile=>{
+        return fetch(GAS_URL,{
+            method:'POST', mode:'no-cors',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({
+                userId:      profile.userId,
+                action,
+                orderId:     action==='update'?lastOrder.orderId:null,
+                name, phone, branch:'鎮江店', date, time,
+                totalAmount: total,
+                items_qty_array: qty,
+                source:      'LINE',
+                spiceNote
+            })
+        });
+    }).then(()=>{
+        alert(action==='update'?'訂單已成功修改！請留意官方帳號訊息。':'訂單已成功送出！請留意官方帳號訊息。');
+        liff.closeWindow();
+    }).catch(()=>{
+        alert('送出失敗，請稍後再試。');
+        setBtnState('submitBtn','確認送出訂單',false);
     });
 }
 
-function escHtml(str) {
-    return String(str).replace(/[&<>'"]/g, match => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
-    })[match]);
+// ══════════════════════════════════════════════════════════
+//  工具函式
+// ══════════════════════════════════════════════════════════
+function closeModal(id){document.getElementById(id).style.display='none';}
+function setBtnState(id,txt,disabled){const b=document.getElementById(id);b.innerText=txt;b.disabled=disabled;}
+function resetMenuState(){qty=new Array(menuItems.length).fill(0);renderMenu();calcTotal();}
+function resetPosForm(){
+    ['posCustName','posCustPhone'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('posPickupDate').value='';
+    document.getElementById('posPickupTime').innerHTML='<option value="">請先選擇日期</option>';
+    resetMenuState();
 }
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/'/g,"&#39;").replace(/"/g,'&quot;');}
 </script>
 </body>
 </html>
