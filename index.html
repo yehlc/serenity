@@ -395,7 +395,8 @@ function startEdit(isEdit) {
         const h = lastOrder.items;
         qty = h.slice(0, 16).concat(h.slice(17, 22)).map(v => parseInt(v) || 0);
         document.getElementById('custName').value   = lastOrder.name;
-        document.getElementById('custPhone').value  = lastOrder.phone;
+        // 讀取電話時過濾掉單引號 (防止 Google Sheet 自動去 0 而加的標記)
+        document.getElementById('custPhone').value  = (lastOrder.phone || '').toString().replace(/^'/, '');
         document.getElementById('pickupDate').value = lastOrder.date;
         document.getElementById('pickupTime').value = lastOrder.time || '';
         if (lastOrder.paymentStatus && lastOrder.paymentStatus !== '未付') {
@@ -507,9 +508,11 @@ function submitPosOrder() {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
             userId: 'POS_STORE', action: 'new', orderId: null,
-            name, phone, branch: '鎮江店', date, time,
+            name: name,
+            phone: "'" + phone, // 加上單引號強制轉字串，防止0被吃掉
+            branch: '鎮江店', date: date, time: time,
             totalAmount: total, items_qty_array: qty,
-            source: 'POS', payStatus, depositAmount: depAmt
+            source: 'POS', payStatus: payStatus, depositAmount: depAmt
         })
     }).then(() => {
         alert(`門市訂單已建立！\n顧客：${name}\n狀態：${payStatus}` +
@@ -548,7 +551,8 @@ function doSearch() {
         return;
     }
     const filtered = allOrders.filter(o => {
-        const p = String(o.phone || '').replace(/[\s\-]/g, '');
+        // 加入過濾掉開頭可能的單引號
+        const p = String(o.phone || '').replace(/[\s\-']/g, '');
         return p.endsWith(last3);
     });
     document.getElementById('searchStatus').innerText =
@@ -564,7 +568,8 @@ function renderOrderList(orders) {
     }
     container.innerHTML = orders.map(o => {
         const color = STATUS_COLOR[o.status] || '#666';
-        const phoneTail = o.phone ? '末四碼 ' + String(o.phone).replace(/[\s\-]/g,'').slice(-4) : '';
+        // 過濾掉可能儲存的單引號
+        const phoneTail = o.phone ? '末四碼 ' + String(o.phone).replace(/[\s\-']/g,'').slice(-4) : '';
         const paidInfo  = o.paid > 0 ? `　已付：NT$ ${o.paid}` : '';
         return `<div class="order-card">
             <div class="order-card-top">
@@ -629,11 +634,19 @@ function openEditInfoModal() {
     if (newT > oldT) diffNote = `<br>🔺 追加差額：<strong style="color:#e65100;">NT$ ${newT - oldT}</strong>`;
     else if (newT < oldT) diffNote = `<br>🔻 減少金額：<strong style="color:#1565c0;">NT$ ${oldT - newT}</strong>（將通知員工退款）`;
     
+    // 檢查退款待處理且加購的情形，顯示紅色提醒文字
+    let showPosPayment = (o.source === 'POS' && newT > oldT);
+    if (o.status === '退款待處理' && newT > oldPaid) {
+        diffNote += `<br><span style="color:red; font-weight:bold;">🔔 提醒：請提醒消費者於取貨時補足差額 NT$ ${newT - oldPaid}</span>`;
+        // 把現場未付金額清空，隱藏當下的 POS 結帳區塊，單純做為提醒
+        showPosPayment = false;
+    }
+
     document.getElementById('editInfoSummary').innerHTML =
         `顧客：<strong>${o.name}</strong><br>` +
         `原金額：NT$ ${oldT} → 新金額：<strong style="color:#8b0000;">NT$ ${newT}</strong>${diffNote}`;
 
-    if (o.source === 'POS' && newT > oldT) {
+    if (showPosPayment) {
         const newUnpaid = newT - oldPaid;
         document.getElementById('editPaymentSection').style.display = 'block';
         document.getElementById('editPaymentTitle').innerText = `💰 待收金額：NT$ ${newUnpaid}`;
@@ -651,7 +664,8 @@ function openEditInfoModal() {
     if (!timeSelect.value && o.time) timeSelect.value = '12:00'; // Fallback
     
     document.getElementById('editCustName').value   = o.name  || '';
-    document.getElementById('editCustPhone').value  = o.phone || '';
+    // 顯示時過濾單引號
+    document.getElementById('editCustPhone').value  = (o.phone || '').toString().replace(/^'/, '');
 
     document.getElementById('editInfoModal').style.display = 'flex';
 }
@@ -671,6 +685,7 @@ function submitEditOrder() {
     
     let posCollectedAmt = 0;
     let posEditMode = false;
+    let finalPayStatus = o.status;
 
     if (document.getElementById('editPaymentSection').style.display === 'block') {
         posEditMode = true;
@@ -682,6 +697,15 @@ function submitEditOrder() {
             if (posCollectedAmt <= 0) { alert('請輸入收取金額！'); return; }
             if (posCollectedAmt >= newUnpaid) { alert('收取金額不可大於等於待收餘額，全付請選「全額付清」！'); return; }
         }
+    }
+
+    // 若原先是退款待處理，且加購金額超過原本已付，則重置狀態
+    if (o.status === '退款待處理' && newT > oldPaid) {
+        alert(`🔔 此訂單原為「退款待處理」，加購後總額已大於已付金額。\n請提醒消費者補足差額：NT$ ${newT - oldPaid}`);
+        // 狀態轉正，不再是退款待處理 (若原先有付過款就標示付訂金，完全沒付就標未付)
+        finalPayStatus = oldPaid > 0 ? '付訂金' : '未付';
+        posEditMode = false;
+        posCollectedAmt = 0;
     }
 
     const modDesc = newT === oldT ? '金額不變，更新內容' :
@@ -697,107 +721,117 @@ function submitEditOrder() {
             userId: o.lineId || 'POS_STORE',
             action: 'update',
             orderId: o.orderId,
-            name, phone, branch: '鎮江店', date, time,
+            name: name,
+            phone: "'" + phone, // 加上單引號強制轉字串
+            branch: '鎮江店', date: date, time: time,
             totalAmount: newT,
             items_qty_array: qty,
             source: 'POS',
-            payStatus: o.status,
+            payStatus: finalPayStatus, // 寫入修正後的狀態
             posEditMode: posEditMode,
             posCollectedAmt: posCollectedAmt
         })
     }).then(() => {
-        const idx = allOrders.findIndex(x => String(x.orderId) === String(o.orderId));
-        if (idx !== -1) allOrders[idx] = {...allOrders[idx], name, phone, date, time, total: newT, paid: oldPaid + posCollectedAmt};
-        alert(`訂單 #${o.orderId} 修改完成！\n${modDesc}`);
+        alert('訂單修改成功！');
         closeModal('editInfoModal');
         exitEditMode();
-    }).catch(() => alert('送出失敗，請稍後再試。'))
+        if (document.getElementById('searchModal').style.display === 'flex') {
+            openSearchModal(); // 重整訂單列表
+        }
+    }).catch(() => alert('修改失敗，請稍後再試。'))
       .finally(() => setBtnState('editSubmitBtn', '✅ 確認修改訂單', false));
 }
 
-// ── 取消編輯模式
-function exitEditMode() {
-    isEditMode = false;
-    currentEditOrder = null;
-    document.getElementById('editBanner').style.display = 'none';
-    const cartBar = document.getElementById('cartBar');
-    cartBar.classList.remove('show');
-    cartBar.onclick = openCart;
-    const btn = document.getElementById('cartBtnText');
-    btn.innerText = '填寫訂單 ➔';
-    btn.className = 'cart-btn-text';
-    resetMenuState();
-}
-
-// ── 隱藏訂單（軟刪除）
-function confirmHideOrder(orderId, name) {
-    if (!confirm(`確認隱藏訂單 #${orderId}（${name}）？\n\n此操作不會永久刪除，\n可在 Google Sheet 中將 G 欄狀態改回「未付」復原。`)) return;
-    fetch(GAS_URL, {
-        method: 'POST', mode: 'no-cors',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ action: 'hide', orderId, source: 'POS' })
-    }).then(() => {
-        allOrders = allOrders.filter(o => String(o.orderId) !== String(orderId));
-        doSearch(); 
-        alert(`訂單 #${orderId} 已隱藏。`);
-    }).catch(() => alert('操作失敗，請稍後再試。'));
-}
-
-// ══════════════════════════════════════════════════════════
-//  一般顧客訂單（LIFF）
-// ══════════════════════════════════════════════════════════
+// ── 購物車與一般下單邏輯 (補齊) ──
 function openCart() {
-    if (total > 0) document.getElementById('orderModal').style.display = 'flex';
-    else alert('購物車是空的，請先選擇餐點唷！');
+    if (total <= 0 || document.getElementById('cartBar').classList.contains('disabled')) return;
+    if (isEditMode) { openEditInfoModal(); return; }
+    document.getElementById('orderModal').style.display = 'flex';
 }
 
 function submitOrder() {
-    if (total <= 0) { alert('餐點數量全為 0，請先選擇餐點！'); return; } 
     const name  = document.getElementById('custName').value.trim();
     const phone = document.getElementById('custPhone').value.trim();
     const date  = document.getElementById('pickupDate').value;
     const time  = document.getElementById('pickupTime').value;
 
-    if (!validateOrderForm(name, phone, date, time)) return; 
+    if (!validateOrderForm(name, phone, date, time)) return;
 
-    setBtnState('submitBtn', '訂單傳送中...', true);
-    liff.getProfile().then(profile => {
-        return fetch(GAS_URL, {
-            method: 'POST', mode: 'no-cors',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                userId:      profile.userId,
-                action,
-                orderId:     action === 'update' ? lastOrder.orderId : null,
-                name, phone, branch: '鎮江店', date, time,
-                totalAmount: total,
-                items_qty_array: qty,
-                source:      'LINE'
-            })
-        });
+    setBtnState('submitBtn', '送出中...', true);
+    fetch(GAS_URL, {
+        method: 'POST', mode: 'no-cors',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            userId: lastOrder ? lastOrder.lineId : (window.liff && liff.isLoggedIn() ? liff.getDecodedIDToken().sub : 'UNKNOWN'),
+            action: action,
+            orderId: action === 'update' ? lastOrder.orderId : null,
+            name: name,
+            phone: "'" + phone, // 加上單引號強制轉字串
+            branch: '鎮江店', date: date, time: time,
+            totalAmount: total, items_qty_array: qty,
+            source: 'LINE'
+        })
     }).then(() => {
-        alert(action === 'update' ? '訂單已成功修改！請留意官方帳號訊息。' : '訂單已成功送出！請留意官方帳號訊息。');
-        liff.closeWindow();
-    }).catch(() => {
-        alert('送出失敗，請稍後再試。');
-        setBtnState('submitBtn', '確認送出訂單', false);
-    });
+        alert(action === 'update' ? '訂單修改成功！' : '訂單建立成功！');
+        closeModal('orderModal');
+        if (window.liff) liff.closeWindow();
+    }).catch(() => alert('送出失敗，請稍後再試。'))
+      .finally(() => setBtnState('submitBtn', '確認送出訂單', false));
 }
 
-// ══════════════════════════════════════════════════════════
-//  工具函式
-// ══════════════════════════════════════════════════════════
 function closeModal(id) { document.getElementById(id).style.display = 'none'; }
-function setBtnState(id, txt, disabled) { const b = document.getElementById(id); b.innerText = txt; b.disabled = disabled; }
-function resetMenuState() { qty = new Array(menuItems.length).fill(0); renderMenu(); calcTotal(); }
+
+function exitEditMode() {
+    isEditMode = false;
+    currentEditOrder = null;
+    document.getElementById('editBanner').style.display = 'none';
+    qty.fill(0);
+    renderMenu();
+    calcTotal();
+    const cartBar = document.getElementById('cartBar');
+    cartBar.onclick = openCart;
+    const btn = document.getElementById('cartBtnText');
+    btn.innerText = '填寫訂單 ➔';
+    btn.className = 'cart-btn-text';
+    if (isPosMode) {
+        cartBar.classList.remove('show');
+    }
+}
+
 function resetPosForm() {
-    document.getElementById('posCustName').value  = '';
+    document.getElementById('posCustName').value = '';
     document.getElementById('posCustPhone').value = '';
     document.getElementById('posPickupDate').value = '';
     document.getElementById('posPickupTime').value = '';
-    resetMenuState();
+    qty.fill(0);
+    renderMenu();
+    calcTotal();
+    document.getElementById('posSummary').style.display = 'none';
 }
-function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/'/g,"&#39;").replace(/"/g,'&quot;'); }
+
+function setBtnState(id, text, disabled) {
+    const btn = document.getElementById(id);
+    btn.innerText = text;
+    btn.disabled = disabled;
+}
+
+function confirmHideOrder(orderId, name) {
+    if (!confirm(`確定要隱藏訂單 #${orderId} (${name}) 嗎？\n(隱藏後將不會出現在列表)`)) return;
+    fetch(GAS_URL, {
+        method: 'POST', mode: 'no-cors',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ action: 'hide', orderId: orderId })
+    }).then(() => {
+        alert('訂單已隱藏');
+        openSearchModal();
+    });
+}
+
+function escHtml(str) {
+    return String(str).replace(/[&<>'"]/g, match => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+    })[match]);
+}
 </script>
 </body>
 </html>
