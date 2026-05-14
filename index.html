@@ -8,7 +8,7 @@
         *{box-sizing:border-box;}
         body{font-family:'Helvetica Neue',Helvetica,Arial,'微軟正黑體',sans-serif;margin:0;padding:0;background:#f5f5f5;padding-bottom:80px;}
         
-        /* ── Header & Header Actions (Task 5) ── */
+        /* ── Header & Header Actions ── */
         .header {
             background:#8b0000; color:#fff; padding:12px 15px; font-size:1.15em; font-weight:bold;
             position:sticky; top:0; z-index:10;
@@ -28,8 +28,6 @@
 
         .menu-container{padding:10px;}
         .menu-item{background:#fff;border-radius:10px;padding:15px;margin-bottom:12px;display:flex;align-items:center;box-shadow:0 2px 5px rgba(0,0,0,.05);}
-        .menu-item.sold-out{opacity:.5;filter:grayscale(100%);}
-        .sold-out-badge{color:#d32f2f;font-weight:bold;font-size:.9em;border:1px solid #d32f2f;padding:2px 5px;border-radius:3px;display:inline-block;margin-top:5px;}
         .menu-item img{width:80px;height:80px;border-radius:8px;object-fit:cover;margin-right:15px;background:#eee;}
         .menu-item-info{flex-grow:1;}
         .menu-item-title{font-size:1.1em;font-weight:bold;color:#333;margin-bottom:5px;}
@@ -112,7 +110,7 @@
     <a onclick="exitEditMode()">× 取消編輯</a>
 </div>
 
-<div id="loading">載入最新菜單與庫存中...</div>
+<div id="loading">載入資料中...</div>
 <div class="menu-container" id="menuList" style="display:none;"></div>
 
 <div class="cart-bar" id="cartBar" onclick="openCart()">
@@ -324,13 +322,13 @@ const STATUS_COLOR = {
     '退款待處理':'#1565c0', '已取消':'#999'
 };
 let total = 0, qty = new Array(menuItems.length).fill(0);
-let inv = {}, lastOrder = null, action = 'new', posPayMode = 'none', editPayMode = 'none';
+let lastOrder = null, action = 'new', posPayMode = 'none', editPayMode = 'none';
 let isPosMode = false, isEditMode = false;
 let currentEditOrder = null;
 let allOrders = [];
 
 // ══════════════════════════════════════════════════════════
-//  通用驗證表單函式 (Task 2 & 6)
+//  通用驗證表單函式
 // ══════════════════════════════════════════════════════════
 function validateOrderForm(name, phone, date, time) {
     if (!name || !phone || !date || !time) {
@@ -354,7 +352,7 @@ function validateOrderForm(name, phone, date, time) {
     if (isPosMode) {
         document.getElementById('headerTitle').innerHTML = '祥和蔬食料理 - 年菜預購 <span class="pos-badge">門市POS</span>';
         document.getElementById('headerActions').style.display = 'flex';
-        loadInventory();
+        showMenu(); // 移除讀取庫存，直接顯示菜單
     } else {
         const script = document.createElement('script');
         script.src = 'https://static.line-scdn.net/liff/edge/2/sdk.js';
@@ -370,24 +368,11 @@ function validateOrderForm(name, phone, date, time) {
     }
 })();
 
-function loadInventory() {
-    const el = document.getElementById('loading');
-    el.innerText = '載入最新菜單與庫存中...';
-    const timer = setTimeout(() => {
-        el.innerHTML = '⚠️ 載入超時，請確認網路後<br><button onclick="loadInventory()" style="margin-top:10px;padding:10px 20px;background:#8b0000;color:#fff;border:none;border-radius:8px;font-size:1em;cursor:pointer;">🔄 重新載入</button>';
-    }, 15000);
-    fetch(GAS_URL + '?pos=1')
-        .then(r => r.json())
-        .then(res => { clearTimeout(timer); inv = res.inventory || {}; showMenu(); })
-        .catch(err => { clearTimeout(timer); el.innerHTML = '❌ 載入失敗<br><button onclick="loadInventory()" style="margin-top:10px;padding:10px 20px;background:#8b0000;color:#fff;border:none;border-radius:8px;font-size:1em;cursor:pointer;">🔄 重新載入</button>'; });
-}
-
 function loadWithHistory() {
     const profile = liff.getDecodedIDToken();
     fetch(GAS_URL + '?userId=' + profile.sub)
         .then(r => r.json())
         .then(res => {
-            inv = res.inventory || {};
             if (res.lastOrder) {
                 lastOrder = res.lastOrder;
                 const diff = Math.ceil((new Date(lastOrder.date) - new Date()) / 86400000);
@@ -437,14 +422,10 @@ function renderMenu() {
     const c = document.getElementById('menuList');
     c.innerHTML = '';
     menuItems.forEach((item, i) => {
-        const stock   = inv[item.name] !== undefined ? parseInt(inv[item.name]) : 999;
-        const soldOut = stock <= 0;
         const q = qty[i] || 0;
         const div = document.createElement('div');
-        div.className = 'menu-item' + (soldOut ? ' sold-out' : '');
-        const ctrl = soldOut
-            ? '<div class="sold-out-badge">已售完</div>'
-            : `<div class="qty-controls">
+        div.className = 'menu-item';
+        const ctrl = `<div class="qty-controls">
                  <button class="qty-btn" onclick="upd(${i},-1)">-</button>
                  <input class="qty-input" id="q${i}" value="${q}" readonly>
                  <button class="qty-btn" onclick="upd(${i},1)">+</button>
@@ -494,7 +475,7 @@ function updatePosSummary() {
 }
 
 function openPosModal() {
-    if (total <= 0) { alert('餐點數量全為 0，請先選擇餐點！'); return; } // Task 1
+    if (total <= 0) { alert('餐點數量全為 0，請先選擇餐點！'); return; }
     selPay('none');
     updatePosSummary();
     document.getElementById('posModal').style.display = 'flex';
@@ -508,7 +489,7 @@ function submitPosOrder() {
     const date  = document.getElementById('posPickupDate').value;
     const time  = document.getElementById('posPickupTime').value;
 
-    if (!validateOrderForm(name, phone, date, time)) return; // Task 2
+    if (!validateOrderForm(name, phone, date, time)) return; 
 
     let depAmt = 0, payStatus = '未付';
     if (posPayMode === 'full') {
@@ -636,7 +617,7 @@ function selEditPay(mode) {
 
 // ── 編輯：第二步 ── 填寫訂購資訊
 function openEditInfoModal() {
-    if (total <= 0) { alert('餐點數量全為 0，請先選擇餐點！'); return; } // Task 1
+    if (total <= 0) { alert('餐點數量全為 0，請先選擇餐點！'); return; }
 
     const o = currentEditOrder;
     document.getElementById('editInfoTitle').innerText = `✏️ 修改訂單 #${o.orderId}`;
@@ -652,7 +633,6 @@ function openEditInfoModal() {
         `顧客：<strong>${o.name}</strong><br>` +
         `原金額：NT$ ${oldT} → 新金額：<strong style="color:#8b0000;">NT$ ${newT}</strong>${diffNote}`;
 
-    // POS 來源且為加購 (Task 3)
     if (o.source === 'POS' && newT > oldT) {
         const newUnpaid = newT - oldPaid;
         document.getElementById('editPaymentSection').style.display = 'block';
@@ -666,7 +646,6 @@ function openEditInfoModal() {
     // 預填欄位
     document.getElementById('editPickupDate').value = o.date  || '';
     
-    // 取貨時間填入舊有時間 (Task 4)
     const timeSelect = document.getElementById('editPickupTime');
     timeSelect.value = o.time || '';
     if (!timeSelect.value && o.time) timeSelect.value = '12:00'; // Fallback
@@ -684,7 +663,7 @@ function submitEditOrder() {
     const date  = document.getElementById('editPickupDate').value;
     const time  = document.getElementById('editPickupTime').value;
 
-    if (!validateOrderForm(name, phone, date, time)) return; // Task 2
+    if (!validateOrderForm(name, phone, date, time)) return;
 
     const o = currentEditOrder;
     const newT = total, oldT = Number(o.total) || 0;
@@ -693,7 +672,6 @@ function submitEditOrder() {
     let posCollectedAmt = 0;
     let posEditMode = false;
 
-    // 處理 POS 現場加購付款 (Task 3)
     if (document.getElementById('editPaymentSection').style.display === 'block') {
         posEditMode = true;
         const newUnpaid = newT - oldPaid;
@@ -774,13 +752,13 @@ function openCart() {
 }
 
 function submitOrder() {
-    if (total <= 0) { alert('餐點數量全為 0，請先選擇餐點！'); return; } // Task 6
+    if (total <= 0) { alert('餐點數量全為 0，請先選擇餐點！'); return; } 
     const name  = document.getElementById('custName').value.trim();
     const phone = document.getElementById('custPhone').value.trim();
     const date  = document.getElementById('pickupDate').value;
     const time  = document.getElementById('pickupTime').value;
 
-    if (!validateOrderForm(name, phone, date, time)) return; // Task 6
+    if (!validateOrderForm(name, phone, date, time)) return; 
 
     setBtnState('submitBtn', '訂單傳送中...', true);
     liff.getProfile().then(profile => {
