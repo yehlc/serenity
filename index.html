@@ -745,51 +745,35 @@ function openEditInfoModal() {
 
 // ── 編輯第三步：送出修改
 function submitEditOrder() {
-    const name  = document.getElementById('editCustName').value.trim();
-    const phone = document.getElementById('editCustPhone').value.trim();
-    const date  = document.getElementById('editPickupDate').value;
-    const time  = document.getElementById('editPickupTime').value;
-    if (!validateOrderForm(name,phone,date,time)) return;
+    const o = currentEditOrder;
+    const newT = total;
+    const oldPaid = Number(o.paid) || 0;
+    const oldSt = String(o.status || '');
+    const lineId = String(o.lineId || ''); // 假設 o 物件中有 lineId (D欄)
+    
+    // --- 修改 1 & 2：判斷取貨日期限制 ---
+    const days = daysUntilPickup(o.date);
+    if (days <= 10) {
+        alert("取貨日前 10 日內不可修改訂單，請聯繫門市人員。");
+        return;
+    }
 
-    const o       = currentEditOrder;
-    const newT    = total;
-    const oldT    = Number(o.total)||0;
-    const oldPaid = Number(o.paid)||0;
-    const oldSt   = String(o.status||'');
-
-    // 【修改1】退款待處理 + 新金額 > 已付 → 傳送員工審核旗標
-    const isRefundAdd = (oldSt==='退款待處理' && newT>oldPaid);
-
-    let posCollectedAmt=0, posEditMode=false;
-    if (!isRefundAdd && document.getElementById('editPaymentSection').style.display==='block') {
-        posEditMode=true;
-        const newUnpaid = newT - oldPaid;
-        if (editPayMode==='full') {
-            posCollectedAmt = newUnpaid;
-        } else if (editPayMode==='deposit') {
-            posCollectedAmt = parseInt(document.getElementById('editDepositAmt').value)||0;
-            if (posCollectedAmt<=0)          { alert('請輸入收取金額！'); return; }
-            if (posCollectedAmt>=newUnpaid)  { alert('收取金額不可大於等於待收餘額，全付請選「全額付清」！'); return; }
+    // --- 修改 1：退款待處理 + 非 POS 訂單 + 金額增加 ---
+    if (oldSt === '退款待處理' && lineId !== 'POS_STORE' && newT > oldPaid) {
+        if (!confirm("此訂單為退款待處理狀態且金額增加，需送交管理員審核同意後方可生效，是否送出審核？")) {
+            return;
         }
-    }
-
-    let modDesc;
-    if (isRefundAdd) {
-        modDesc=`退款訂單加購（需員工審核），補繳差額 NT$ ${newT-oldPaid}`;
-    } else if (newT===oldT) {
-        modDesc='金額不變，更新內容';
-    } else if (newT>oldT) {
-        modDesc=`加訂，需追加 NT$ ${newT-oldT}`;
+        // 設定一個特殊 action 讓後端知道要走審核流程
+        var requestAction = 'request_approval'; 
     } else {
-        modDesc=`少訂，需退款 NT$ ${oldT-newT}`;
+        var requestAction = 'update';
     }
 
-    if (!confirm(`確認修改訂單 #${o.orderId}？\n顧客：${name}\n${modDesc}`)) return;
+    // --- 修改 3：清蒸臭豆腐數量歸 0 處理 ---
+    // 這裡原本程式碼應該已經有處理 spiceNote，確保傳給後端時是空的
+    const spiceNote = qty[6] > 0 ? `清蒸臭豆腐：${stinkTofuSpice}` : '';
 
-    // 【修改5】辣度備註
-    const spiceNote = qty[6]>0 ? `清蒸臭豆腐：${stinkTofuSpice}` : '';
-
-    setBtnState('editSubmitBtn','送出中...',true);
+    setBtnState('editSubmitBtn', '處理中...', true);
     fetch(GAS_URL, {
         method:'POST', mode:'no-cors',
         headers:{'Content-Type':'application/json'},
