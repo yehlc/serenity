@@ -142,8 +142,8 @@
             <!-- 【修改4】onchange 動態產生時間選單 -->
             <select id="editPickupDate" required onchange="syncTimeOptions('editPickupDate','editPickupTime')">
                 <option value="">請選擇取貨日期</option>
-                <option value="2027-02-04">2027 年 02 月 04 日（除夕）</option>
-                <option value="2027-02-05">2027 年 02 月 05 日（初一）</option>
+                <option value="2027-02-04">2027 年 02 月 04 日（除夕前一天）</option>
+                <option value="2027-02-05">2027 年 02 月 05 日（除夕）</option>
             </select>
         </div>
         <div class="form-group">
@@ -199,8 +199,8 @@
             <label>取貨日期</label>
             <select id="pickupDate" required onchange="syncTimeOptions('pickupDate','pickupTime')">
                 <option value="">請選擇取貨日期</option>
-                <option value="2027-02-04">2027 年 02 月 04 日（除夕）</option>
-                <option value="2027-02-05">2027 年 02 月 05 日（初一）</option>
+                <option value="2027-02-04">2027 年 02 月 04 日（除夕前一天）</option>
+                <option value="2027-02-05">2027 年 02 月 05 日（除夕）</option>
             </select>
         </div>
         <div class="form-group">
@@ -236,8 +236,8 @@
             <label>取貨日期</label>
             <select id="posPickupDate" required onchange="syncTimeOptions('posPickupDate','posPickupTime')">
                 <option value="">請選擇取貨日期</option>
-                <option value="2027-02-04">2027 年 02 月 04 日（除夕）</option>
-                <option value="2027-02-05">2027 年 02 月 05 日（初一）</option>
+                <option value="2027-02-04">2027 年 02 月 04 日（除夕前一天）</option>
+                <option value="2027-02-05">2027 年 02 月 05 日（除夕）</option>
             </select>
         </div>
         <div class="form-group">
@@ -323,8 +323,8 @@ const menuItems = [
 ];
 
 /* 【修改4】各日期對應可選取貨時間
-   2027-02-04（除夕）：僅 12:00
-   2027-02-05（初一）：12:00 / 13:00 / 14:00 / 15:30          */
+   2027-02-04（除夕前一天）：僅 12:00
+   2027-02-05（除夕）：12:00 / 13:00 / 14:00 / 15:30          */
 const PICKUP_TIME_MAP = {
     '2027-02-04': ['12:00'],
     '2027-02-05': ['12:00','13:00','14:00','15:30']
