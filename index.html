@@ -614,7 +614,6 @@ function submitPosOrder() {
         smsNotify: true
     });
 
-    alert('門市訂單已送出！\n顧客：' + name + '\n狀態：' + payStatus + '\n後台會繼續寫入訂單並發送簡訊。');
     closeModal('posModal');
     resetPosForm();
     setBtnState('posSubmitBtn', '✅ 建立門市訂單', false);
@@ -830,7 +829,6 @@ function submitEditOrder() {
         posCollectedAmt: depAmt
     });
 
-    alert('訂單 #' + o.orderId + ' 修改已送出！後台會繼續更新訂單並發送簡訊。');
     closeModal('editInfoModal');
     exitEditMode();
     setBtnState('editSubmitBtn', '✅ 確認修改訂單', false);
@@ -888,25 +886,19 @@ function submitOrder() {
 
     setBtnState('submitBtn','訂單傳送中...',true);
     liff.getProfile().then(profile=>{
-        return fetch(GAS_URL,{
-            method:'POST', mode:'no-cors',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({
-                userId:      profile.userId,
-                action,
-                orderId:     action==='update'?lastOrder.orderId:null,
-                name, phone, branch:'鎮江店', date, time,
-                totalAmount: total,
-                items_qty_array: qty,
-                source:      'LINE',
-                spiceNote
-            })
+        postGasFireAndForget({
+            userId:      profile.userId,
+            action,
+            orderId:     action==='update'?lastOrder.orderId:null,
+            name, phone, branch:'鎮江店', date, time,
+            totalAmount: total,
+            items_qty_array: qty,
+            source:      'LINE',
+            spiceNote
         });
-    }).then(()=>{
-        alert(action==='update'?'訂單已成功修改！請留意官方帳號訊息。':'訂單已成功送出！請留意官方帳號訊息。');
         liff.closeWindow();
-    }).catch(()=>{
-        alert('送出失敗，請稍後再試。');
+    }).catch((err)=>{
+        console.error(err);
         setBtnState('submitBtn','確認送出訂單',false);
     });
 }
