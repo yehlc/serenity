@@ -674,6 +674,9 @@ function doEditOrder(order) {
     closeModal('searchModal');
 
     const items = order.items; // 22 個元素：items[0..15]=H-W, items[16]=X欄(松露蘿蔔糕), items[17..21]=Y-AC
+    const oldSpice = String(order.spiceNote || '');
+    const spiceMatch = oldSpice.match(/清蒸臭豆腐[：:]\s*([^\n,，]+)/);
+    stinkTofuSpice = spiceMatch ? spiceMatch[1].trim() : '不辣';
     // 【修改6】對應回 menuItems 順序（qty[21] = 松露蘿蔔糕 = items[16]）
     qty = items.slice(0,16)
                .concat(items.slice(17,22))
@@ -798,7 +801,11 @@ function submitEditOrder() {
             payStatus: payStatus,
             depositAmount: depAmt,
             spiceNote: spiceNote,
-            sendSms: true 
+            smsNotify: true,
+            sendSms: true,
+            editedFromPos: true,
+            posEditMode: document.getElementById('editPaymentSection').style.display === 'block',
+            posCollectedAmt: depAmt
         })
     }).then(() => {
         alert(`訂單 #${o.orderId} 修改成功！變更簡訊發送中。`);
