@@ -550,36 +550,47 @@ function submitPosOrder() {
     const time  = document.getElementById('posPickupTime').value;
     if (!validateOrderForm(name, phone, date, time)) return;
 
-    let depAmt=0, payStatus='未付';
-    if (posPayMode==='full')    { payStatus='付清'; depAmt=total; }
-    else if (posPayMode==='deposit') {
-        depAmt = parseInt(document.getElementById('depositAmt').value)||0;
-        if (depAmt<=0)       { alert('請輸入訂金金額！'); return; }
-        if (depAmt>=total)   { alert('訂金不可大於等於總金額，全付請選「全額付清」！'); return; }
+    let depAmt = 0, payStatus = '未付';
+    if (posPayMode === 'full') { payStatus = '付清'; depAmt = total; }
+    else if (posPayMode === 'deposit') {
+        depAmt = parseInt(document.getElementById('depositAmt').value) || 0;
+        if (depAmt <= 0) { alert('請輸入訂金金額！'); return; }
+        if (depAmt >= total) { alert('訂金不可大於等於總金額，全付請選「全額付清」！'); return; }
         payStatus = '付訂金';
     }
 
     // 【修改5】辣度備註
-    const spiceNote = qty[6]>0 ? `清蒸臭豆腐：${stinkTofuSpice}` : '';
+    const spiceNote = qty[6] > 0 ? `清蒸臭豆腐：${stinkTofuSpice}` : '';
 
-    setBtnState('posSubmitBtn','建立中...',true);
+    setBtnState('posSubmitBtn', '建立中...', true);
     fetch(GAS_URL, {
-        method:'POST', mode:'no-cors',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-            userId:'POS_STORE', action:'new', orderId:null,
-            name, phone, branch:'鎮江店', date, time,
-            totalAmount:total, items_qty_array:qty,
-            source:'POS', payStatus, depositAmount:depAmt,
-            spiceNote
+        method: 'POST', 
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            userId: 'POS_STORE', 
+            action: 'new', 
+            orderId: null,
+            name: name, 
+            phone: phone, // 確保送出手機
+            branch: '鎮江店', 
+            date: date, 
+            time: time,
+            totalAmount: total, 
+            items_qty_array: qty,
+            source: 'POS', 
+            payStatus: payStatus, 
+            depositAmount: depAmt,
+            spiceNote: spiceNote,
+            smsNotify: true // 強制後端觸發簡訊發送
         })
-    }).then(()=>{
-        alert(`門市訂單已建立！\n顧客：${name}\n狀態：${payStatus}`+
-              (depAmt>0&&payStatus!=='付清'?`\n訂金：NT$ ${depAmt}`:''));
+    }).then(() => {
+        alert(`門市訂單已建立並發送簡訊！\n顧客：${name}\n狀態：${payStatus}` +
+              (depAmt > 0 && payStatus !== '付清' ? `\n訂金：NT$ ${depAmt}` : ''));
         closeModal('posModal');
         resetPosForm();
-    }).catch(()=>alert('建立失敗，請稍後再試。'))
-      .finally(()=>setBtnState('posSubmitBtn','✅ 建立門市訂單',false));
+    }).catch(() => alert('建立失敗，請稍後再試。'))
+      .finally(() => setBtnState('posSubmitBtn', '✅ 建立門市訂單', false));
 }
 
 // ══════════════════════════════════════════════════════════
@@ -745,80 +756,56 @@ function openEditInfoModal() {
 
 // ── 編輯第三步：送出修改
 function submitEditOrder() {
+    const o = currentEditOrder;
+    // 獲取修改後輸入框的值
     const name  = document.getElementById('editCustName').value.trim();
     const phone = document.getElementById('editCustPhone').value.trim();
     const date  = document.getElementById('editPickupDate').value;
     const time  = document.getElementById('editPickupTime').value;
-    if (!validateOrderForm(name,phone,date,time)) return;
+    
+    if (!validateOrderForm(name, phone, date, time)) return;
 
-    const o       = currentEditOrder;
-    const newT    = total;
-    const oldT    = Number(o.total)||0;
-    const oldPaid = Number(o.paid)||0;
-    const oldSt   = String(o.status||'');
-
-    // 【修改1】退款待處理 + 新金額 > 已付 → 傳送員工審核旗標
-    const isRefundAdd = (oldSt==='退款待處理' && newT>oldPaid);
-
-    let posCollectedAmt=0, posEditMode=false;
-    if (!isRefundAdd && document.getElementById('editPaymentSection').style.display==='block') {
-        posEditMode=true;
-        const newUnpaid = newT - oldPaid;
-        if (editPayMode==='full') {
-            posCollectedAmt = newUnpaid;
-        } else if (editPayMode==='deposit') {
-            posCollectedAmt = parseInt(document.getElementById('editDepositAmt').value)||0;
-            if (posCollectedAmt<=0)          { alert('請輸入收取金額！'); return; }
-            if (posCollectedAmt>=newUnpaid)  { alert('收取金額不可大於等於待收餘額，全付請選「全額付清」！'); return; }
+    let depAmt = 0, payStatus = o.status; // 預設沿用舊狀態
+    if (document.getElementById('editPaymentSection').style.display === 'block') {
+        if (editPayMode === 'full') { payStatus = '付清'; depAmt = total - (Number(o.paid) || 0); }
+        else if (editPayMode === 'deposit') {
+            depAmt = parseInt(document.getElementById('editDepositAmt').value) || 0;
+            if (depAmt <= 0) { alert('請輸入收取的金額！'); return; }
+            payStatus = '付訂金';
         }
     }
 
-    let modDesc;
-    if (isRefundAdd) {
-        modDesc=`退款訂單加購（需員工審核），補繳差額 NT$ ${newT-oldPaid}`;
-    } else if (newT===oldT) {
-        modDesc='金額不變，更新內容';
-    } else if (newT>oldT) {
-        modDesc=`加訂，需追加 NT$ ${newT-oldT}`;
-    } else {
-        modDesc=`少訂，需退款 NT$ ${oldT-newT}`;
-    }
+    const spiceNote = qty[6] > 0 ? `清蒸臭豆腐：${stinkTofuSpice}` : '';
 
-    if (!confirm(`確認修改訂單 #${o.orderId}？\n顧客：${name}\n${modDesc}`)) return;
-
-    // 【修改5】辣度備註
-    const spiceNote = qty[6]>0 ? `清蒸臭豆腐：${stinkTofuSpice}` : '';
-
-    setBtnState('editSubmitBtn','送出中...',true);
+    setBtnState('editSubmitBtn', '修改中...', true);
     fetch(GAS_URL, {
-        method:'POST', mode:'no-cors',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-            userId:       o.lineId||'POS_STORE',
-            action:       'update',
-            orderId:      o.orderId,
-            name, phone, branch:'鎮江店', date, time,
-            totalAmount:  newT,
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            userId: o.userId || 'POS_STORE',
+            action: 'update', // 告訴後端這是修改模式
+            orderId: o.orderId,
+            name: name,
+            phone: phone, // 核心必填：更新後的手機號碼，供發送簡訊使用
+            branch: '鎮江店',
+            date: date,
+            time: time,
+            totalAmount: total,
             items_qty_array: qty,
-            source:       'POS',
-            payStatus:    o.status,
-            posEditMode,
-            posCollectedAmt,
-            fromRefundStatus: isRefundAdd,  // 【修改1】傳遞旗標給後端
-            spiceNote
+            source: o.source || 'LINE',
+            payStatus: payStatus,
+            depositAmount: depAmt,
+            spiceNote: spiceNote,
+            sendSms: true // 觸發後端變更簡訊
         })
-    }).then(()=>{
-        const idx=allOrders.findIndex(x=>String(x.orderId)===String(o.orderId));
-        if (idx!==-1) allOrders[idx]={...allOrders[idx],name,phone,date,time,total:newT,paid:oldPaid+posCollectedAmt};
-        if (isRefundAdd) {
-            alert(`加購申請已送出！\n員工收到 LINE 通知後審核，\n同意後顧客將收到補繳差額通知。`);
-        } else {
-            alert(`訂單 #${o.orderId} 修改完成！\n${modDesc}`);
-        }
+    }).then(() => {
+        alert(`訂單 #${o.orderId} 修改成功！變更確認簡訊已發送。`);
         closeModal('editInfoModal');
         exitEditMode();
-    }).catch(()=>alert('送出失敗，請稍後再試。'))
-      .finally(()=>setBtnState('editSubmitBtn','✅ 確認修改訂單',false));
+        if (typeof openSearchModal === 'function') openSearchModal(); // 刷新列表
+    }).catch(() => alert('修改失敗，請稍後再試。'))
+      .finally(() => setBtnState('editSubmitBtn', '✅ 確認修改訂單', false));
 }
 
 // ── 取消編輯
