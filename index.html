@@ -1,914 +1,906 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>祥和年菜預購</title>
-    <style>
-        *{box-sizing:border-box;}
-        body{font-family:'Helvetica Neue',Helvetica,Arial,'微軟正黑體',sans-serif;margin:0;padding:0;background:#f5f5f5;padding-bottom:80px;}
+// ║  menu.gs  v4  ─  祥和年菜訂購系統核心後端                          ║
+// ║  Sheet「2027年菜」欄位（0-based）：                                 ║
+// ║  A(0)序號 B(1)訂單編號 C(2)訂購人 D(3)LINE_ID E(4)電話 F(5)取貨日 ║
+// ║  G(6)付款狀態 H-W(7-22)菜16項                                    ║
+// ║  【修改6】X(23)松露蘿蔔糕（原空白欄，請更新 Sheet 標題）               ║
+// ║  Y-AC(24-28)菜5項（松露油飯~酥香蘿蔔糕）                            ║
+// ║  AD(29)合計 AE(30)應付 AF(31)已付 AG(32)未付 AH(33)後五碼         ║
+// ║  AI(34)對帳確認 AJ(35)分店 AK(36)時間 AL(37)來源 AM(38)訂金       ║
+// ║  AN(39)截止時間戳 AO(40)贈品/備註 AP(41)提醒記錄                    ║
+// ╚══════════════════════════════════════════════════════════════════╝
+//
+// ★ 操作提示：請至 Google Sheet「2027年菜」第1列將 X 欄標題改為「松露蘿蔔糕」
 
-        .header{background:#8b0000;color:#fff;padding:12px 15px;font-size:1.15em;font-weight:bold;position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center;}
-        .header-title{display:flex;align-items:center;}
-        .pos-badge{background:#ff6f00;font-size:.7em;padding:3px 8px;border-radius:10px;margin-left:8px;white-space:nowrap;}
-        .header-actions{display:none;gap:8px;}
-        .hdr-btn{padding:6px 12px;border:none;border-radius:6px;font-weight:bold;color:white;cursor:pointer;font-size:.85em;box-shadow:0 1px 3px rgba(0,0,0,.3);}
-        .hdr-btn.orange{background:#ff6f00;}
-        .hdr-btn.blue{background:#1565c0;}
+var LINE_CHANNEL_ACCESS_TOKEN = 'g9FMDLFT0LHaab73jUUgUsJ8uXv9cO0VM7JObGc+Qwx1WJGchUFG2PI1a3Q8M759aAnnTR2uetzEAn9N3OEtqZp3ASzhhJ3RWdCBnU7qZt+0smgqIC9bc2xEsA+B4BvWFI52Y/uR0Qjc8dp2Wr7H8AdB04t89/1O/w1cDnyilFU=';
+var SHEET_NAME = '2027年菜';
 
-        .edit-banner{display:none;background:#e3f2fd;border-left:4px solid #1565c0;padding:10px 15px;font-size:.88em;color:#1565c0;position:sticky;top:54px;z-index:9;box-shadow:0 2px 4px rgba(0,0,0,0.05);}
-        .edit-banner span{font-weight:bold;}
-        .edit-banner a{color:#1565c0;margin-left:12px;text-decoration:underline;cursor:pointer;font-size:.9em;float:right;}
-
-        .menu-container{padding:10px;}
-        .menu-item{background:#fff;border-radius:10px;padding:15px;margin-bottom:12px;display:flex;align-items:center;box-shadow:0 2px 5px rgba(0,0,0,.05);}
-        .menu-item img{width:80px;height:80px;border-radius:8px;object-fit:cover;margin-right:15px;background:#eee;}
-        .menu-item-info{flex-grow:1;}
-        .menu-item-title{font-size:1.1em;font-weight:bold;color:#333;margin-bottom:5px;}
-        .menu-item-price{color:#e91e63;font-weight:bold;font-size:1.1em;}
-        .qty-controls{display:flex;align-items:center;}
-        .qty-btn{width:30px;height:30px;border:1px solid #ccc;background:#fff;border-radius:5px;font-size:1.2em;cursor:pointer;display:flex;align-items:center;justify-content:center;}
-        .qty-input{width:40px;text-align:center;border:none;font-size:1.1em;font-weight:bold;margin:0 5px;background:transparent;}
-
-        /* 【修改5】辣度選項樣式 */
-        .spice-row{margin-top:6px;font-size:.82em;color:#666;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
-        .spice-row label{display:flex;align-items:center;gap:3px;cursor:pointer;}
-
-        .cart-bar{position:fixed;bottom:0;left:0;width:100%;background:#333;color:#fff;display:none;justify-content:space-between;align-items:center;padding:15px 20px;cursor:pointer;z-index:20;}
-        .cart-bar.show{display:flex;}
-        .cart-bar.disabled{background:#999;cursor:not-allowed;}
-        .cart-total-text{font-size:1.2em;font-weight:bold;}
-        .cart-btn-text{padding:8px 15px;border-radius:20px;font-weight:bold;background:#e91e63;}
-        .cart-btn-text.blue{background:#1565c0;}
-
-        .modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);z-index:30;justify-content:center;align-items:flex-end;}
-        .modal-content{background:#fff;width:100%;max-height:90vh;border-radius:20px 20px 0 0;padding:25px 20px;overflow-y:auto;animation:slideUp .3s ease-out;}
-        @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
-        .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;border-bottom:1px solid #eee;padding-bottom:10px;}
-        .modal-header h3{margin:0;font-size:1.3em;}
-        .close-btn{font-size:1.5em;color:#999;cursor:pointer;border:none;background:none;}
-        .form-group{margin-bottom:15px;}
-        .form-group label{display:block;font-weight:bold;margin-bottom:5px;color:#555;}
-        .form-group input,.form-group select{width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;font-size:1em;}
-        .submit-btn{width:100%;padding:15px;background:#8b0000;color:#fff;border:none;border-radius:8px;font-size:1.2em;font-weight:bold;margin-top:10px;cursor:pointer;}
-        .submit-btn:disabled{background:#ccc;cursor:not-allowed;}
-        .submit-btn.green{background:#2e7d32;}
-        .submit-btn.gray{background:#555;}
-        .submit-btn.blue{background:#1565c0;}
-
-        .payment-section{background:#fff8e1;border:1px solid #ffd54f;border-radius:10px;padding:15px;margin-bottom:15px;}
-        .payment-section h4{margin:0 0 10px;color:#e65100;font-size:1em;}
-        .pay-row{display:flex;gap:10px;margin-bottom:10px;}
-        .pay-row button{flex:1;padding:10px;border:2px solid #ccc;border-radius:8px;background:#fff;font-size:.95em;font-weight:bold;cursor:pointer;transition:all .2s;}
-        .pay-row button.sel{border-color:#8b0000;background:#8b0000;color:#fff;}
-        .dep-wrap{display:none;}
-        .dep-wrap.show{display:block;}
-        .order-summary{background:#f5f5f5;border-radius:8px;padding:12px;margin-bottom:15px;font-size:.95em;}
-        .order-summary .tot{font-weight:bold;font-size:1.1em;color:#8b0000;margin-top:8px;}
-        .paid-notice{background:#fff3e0;border-left:4px solid #ff9800;padding:12px 15px;border-radius:6px;margin-bottom:15px;font-size:.9em;color:#555;}
-
-        .order-card{border:1px solid #eaeaea;border-radius:10px;padding:12px;margin-bottom:8px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.04);}
-        .order-card-top{display:flex;justify-content:space-between;align-items:flex-start;}
-        .order-card-name{font-weight:bold;font-size:1em;}
-        .order-card-meta{font-size:.8em;color:#888;margin-top:3px;}
-        .order-card-amount{font-size:.88em;color:#444;margin-top:5px;}
-        .order-card-actions{display:flex;gap:6px;margin-top:8px;}
-        .btn-edit{flex:1;padding:8px;background:#1565c0;color:#fff;border:none;border-radius:6px;font-weight:bold;cursor:pointer;font-size:.88em;}
-        .btn-hide{flex:1;padding:8px;background:#fff;color:#c62828;border:1.5px solid #c62828;border-radius:6px;font-weight:bold;cursor:pointer;font-size:.88em;}
-        .status-tag{font-weight:bold;font-size:.82em;padding:2px 7px;border-radius:8px;white-space:nowrap;}
-
-        .search-last3{font-size:1.8em!important;letter-spacing:.4em;text-align:center;font-weight:bold!important;border:2px solid #1565c0!important;border-radius:10px!important;}
-        .search-hint{font-size:.82em;color:#999;text-align:center;margin-top:4px;}
-        .search-status{font-size:.85em;color:#666;margin:6px 0 8px;min-height:1.2em;}
-        .edit-info-box{background:#e3f2fd;border-left:4px solid #1565c0;padding:10px 14px;border-radius:6px;margin-bottom:15px;font-size:.88em;line-height:1.6;}
-        #loading{text-align:center;padding:30px;color:#666;font-weight:bold;}
-    </style>
-</head>
-<body>
-
-<div class="header" id="pageHeader">
-    <div class="header-title" id="headerTitle">祥和蔬食料理 - 年菜預購</div>
-    <div class="header-actions" id="headerActions">
-        <button class="hdr-btn orange" onclick="openPosModal()">🖥️ 新增</button>
-        <button class="hdr-btn blue" onclick="openSearchModal()">📋 訂單</button>
-    </div>
-</div>
-
-<div class="edit-banner" id="editBanner">
-    <span id="editBannerText">✏️ 編輯模式</span>
-    <a onclick="exitEditMode()">× 取消編輯</a>
-</div>
-
-<div id="loading">載入資料中...</div>
-<div class="menu-container" id="menuList" style="display:none;"></div>
-
-<div class="cart-bar" id="cartBar" onclick="openCart()">
-    <span class="cart-total-text" id="cartTotal">合計: NT$ 0</span>
-    <span class="cart-btn-text" id="cartBtnText">填寫訂單 ➔</span>
-</div>
-
-<!-- 訂單管理 Modal -->
-<div class="modal-overlay" id="searchModal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3>📋 訂單管理</h3>
-            <button class="close-btn" onclick="closeModal('searchModal')">×</button>
-        </div>
-        <div class="form-group" style="margin-bottom:5px;">
-            <label>電話末三碼篩選</label>
-            <input type="tel" id="searchPhone" class="search-last3" placeholder="例：678" maxlength="3" oninput="doSearch()" autocomplete="off" inputmode="numeric">
-            <div class="search-hint">輸入末三碼即時篩選，空白則顯示全部</div>
-        </div>
-        <div id="searchStatus" class="search-status"></div>
-        <div id="searchResults" style="max-height:58vh;overflow-y:auto;padding-right:2px;"></div>
-    </div>
-</div>
-
-<!-- POS 編輯訂單 Modal -->
-<div class="modal-overlay" id="editInfoModal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3 id="editInfoTitle">✏️ 編輯訂購資訊</h3>
-            <button class="close-btn" onclick="closeModal('editInfoModal')">×</button>
-        </div>
-        <div class="edit-info-box" id="editInfoSummary"></div>
-
-        <div class="form-group">
-            <label>取貨門市</label>
-            <input type="text" value="鎮江店" readonly style="background:#f5f5f5;color:#777;cursor:not-allowed;">
-        </div>
-        <div class="form-group">
-            <label>取貨日期</label>
-            <!-- 【修改4】onchange 動態產生時間選單 -->
-            <select id="editPickupDate" required onchange="syncTimeOptions('editPickupDate','editPickupTime')">
-                <option value="">請選擇取貨日期</option>
-                <option value="2027-02-04">2027 年 02 月 04 日（除夕）</option>
-                <option value="2027-02-05">2027 年 02 月 05 日（初一）</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label>取貨時間</label>
-            <!-- 【修改4】選項由 syncTimeOptions() 動態填入 -->
-            <select id="editPickupTime" required>
-                <option value="">請先選擇日期</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label>顧客姓名</label>
-            <input type="text" id="editCustName" placeholder="顧客姓名" required>
-        </div>
-        <div class="form-group">
-            <label>連絡電話</label>
-            <input type="tel" id="editCustPhone" placeholder="例如: 0912345678" required>
-        </div>
-
-        <div class="payment-section" id="editPaymentSection" style="display:none;">
-            <h4 id="editPaymentTitle">💰 待收餘額：NT$ 0</h4>
-            <div class="pay-row">
-                <button id="epBtn0" onclick="selEditPay('none')">尚未付款</button>
-                <button id="epBtn1" onclick="selEditPay('deposit')">付訂金</button>
-                <button id="epBtn2" onclick="selEditPay('full')">全額付清</button>
-            </div>
-            <div class="dep-wrap" id="editDepWrap">
-                <div class="form-group" style="margin-bottom:0;">
-                    <label>本次收取金額 (NT$)</label>
-                    <input type="number" id="editDepositAmt" placeholder="請輸入收取金額" min="1">
-                </div>
-            </div>
-        </div>
-
-        <button class="submit-btn green" id="editSubmitBtn" onclick="submitEditOrder()">✅ 確認修改訂單</button>
-    </div>
-</div>
-
-<!-- LIFF 顧客訂單 Modal -->
-<div class="modal-overlay" id="orderModal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3 id="modalTitle">填寫訂購資訊</h3>
-            <button class="close-btn" onclick="closeModal('orderModal')">×</button>
-        </div>
-        <div class="paid-notice" id="paidNotice" style="display:none;">
-            ⚠️ 您的訂單已付款，修改後狀態將重置為「未付」，需重新完成付款流程。
-        </div>
-        <div class="form-group">
-            <label>取貨門市</label>
-            <input type="text" value="鎮江店" readonly style="background:#f5f5f5;color:#777;cursor:not-allowed;">
-        </div>
-        <div class="form-group">
-            <label>取貨日期</label>
-            <select id="pickupDate" required onchange="syncTimeOptions('pickupDate','pickupTime')">
-                <option value="">請選擇取貨日期</option>
-                <option value="2027-02-04">2027 年 02 月 04 日（除夕）</option>
-                <option value="2027-02-05">2027 年 02 月 05 日（初一）</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label>取貨時間</label>
-            <select id="pickupTime" required>
-                <option value="">請先選擇日期</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label>訂購人姓名</label>
-            <input type="text" id="custName" placeholder="請填寫真實姓名" required>
-        </div>
-        <div class="form-group">
-            <label>連絡電話</label>
-            <input type="tel" id="custPhone" placeholder="例如: 0912345678" required>
-        </div>
-        <button class="submit-btn" id="submitBtn" onclick="submitOrder()">確認送出訂單</button>
-    </div>
-</div>
-
-<!-- POS 新增訂單 Modal -->
-<div class="modal-overlay" id="posModal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3>🖥️ 門市現場建立訂單</h3>
-            <button class="close-btn" onclick="closeModal('posModal')">×</button>
-        </div>
-        <div class="form-group">
-            <label>取貨門市</label>
-            <input type="text" value="鎮江店" readonly style="background:#f5f5f5;color:#777;cursor:not-allowed;">
-        </div>
-        <div class="form-group">
-            <label>取貨日期</label>
-            <select id="posPickupDate" required onchange="syncTimeOptions('posPickupDate','posPickupTime')">
-                <option value="">請選擇取貨日期</option>
-                <option value="2027-02-04">2027 年 02 月 04 日（除夕）</option>
-                <option value="2027-02-05">2027 年 02 月 05 日（初一）</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label>取貨時間</label>
-            <select id="posPickupTime" required>
-                <option value="">請先選擇日期</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label>顧客姓名</label>
-            <input type="text" id="posCustName" placeholder="顧客姓名" required>
-        </div>
-        <div class="form-group">
-            <label>連絡電話</label>
-            <input type="tel" id="posCustPhone" placeholder="例如: 0912345678" required>
-        </div>
-        <div class="payment-section">
-            <h4>💰 現場付款方式</h4>
-            <div class="pay-row">
-                <button id="pBtn0" onclick="selPay('none')">尚未付款</button>
-                <button id="pBtn1" onclick="selPay('deposit')">付訂金</button>
-                <button id="pBtn2" onclick="selPay('full')">全額付清</button>
-            </div>
-            <div class="dep-wrap" id="depWrap">
-                <div class="form-group" style="margin-bottom:0;">
-                    <label>訂金金額 (NT$)</label>
-                    <input type="number" id="depositAmt" placeholder="請輸入訂金金額" min="1">
-                </div>
-            </div>
-        </div>
-        <div class="order-summary" id="posSummary" style="display:none;">
-            <div id="summaryItems"></div>
-            <div class="tot" id="summaryTotal"></div>
-        </div>
-        <button class="submit-btn green" id="posSubmitBtn" onclick="submitPosOrder()">✅ 建立門市訂單</button>
-    </div>
-</div>
-
-<div id="choiceModal" class="modal-overlay" style="align-items:center;">
-    <div class="modal-content" style="border-radius:15px;margin:20px;text-align:center;">
-        <h3>您有一筆未完成的訂單</h3>
-        <p style="margin-bottom:20px;">請問您想要？</p>
-        <button class="submit-btn" onclick="startEdit(true)">修改原訂單</button>
-        <button class="submit-btn gray" style="margin-top:15px;" onclick="startEdit(false)">再開一筆新訂單</button>
-    </div>
-</div>
-
-<script>
-// ══════════════════════════════════════════════════════════
-//  全域常數 & 狀態
-// ══════════════════════════════════════════════════════════
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwWPu_pZsN9EoFVYJmyUhndaj6IfO2ekHi1jnB7lJMO2I0MDemfZSNWlDkiQUIyUK8u/exec';
-
-/* 【修改5】清蒸臭豆腐 index=6；【修改6】新增松露蘿蔔糕 index=21
-   ※ 索引對應 Google Sheet 欄位：
-     index 0-15  → H-W 欄（共16格）
-     index 16-20 → Y-AC 欄（共5格，松露油飯~酥香蘿蔔糕）
-     index 21    → X 欄（原空白，現改為「松露蘿蔔糕」）
-   請記得在 Sheet 第1列把 X 欄標題改為「松露蘿蔔糕」         */
-const menuItems = [
-    {name:"祥和拼盤",  price:800},  // 0
-    {name:"佛跳牆",    price:1380}, // 1
-    {name:"肉骨茶鍋",  price:1380}, // 2
-    {name:"酸白菜鍋",  price:860},  // 3
-    {name:"麻油鍋",    price:860},  // 4
-    {name:"紅燒獅子頭",price:640},  // 5
-    {name:"清蒸臭豆腐",price:640},  // 6 ← 【修改5】有辣度選項
-    {name:"麻辣臭豆腐",price:600},  // 7
-    {name:"三杯猴頭菇",price:760},  // 8
-    {name:"宮保素雞丁",price:600},  // 9
-    {name:"糖醋素肉",  price:600},  // 10
-    {name:"素杏鮑牛腩煲",price:720},// 11
-    {name:"酸白菜素牛肉",price:560},// 12
-    {name:"麻油素腰花",price:760},  // 13
-    {name:"蓉城口水雞",price:760},  // 14
-    {name:"祥和素油雞",price:640},  // 15
-    {name:"松露油飯",  price:380},  // 16
-    {name:"椒麻油飯",  price:300},  // 17
-    {name:"炒炊粉",    price:180},  // 18
-    {name:"原味蘿蔔糕",price:200},  // 19
-    {name:"酥香蘿蔔糕",price:280},  // 20
-    {name:"松露蘿蔔糕",price:380}   // 21 ← 【修改6】新菜色，對應 Sheet X 欄
-];
-
-/* 【修改4】各日期對應可選取貨時間
-   2027-02-04（除夕）：僅 12:00
-   2027-02-05（初一）：12:00 / 13:00 / 14:00 / 15:30          */
-const PICKUP_TIME_MAP = {
-    '2027-02-04': ['12:00'],
-    '2027-02-05': ['12:00','13:00','14:00','15:30']
+var COL = {
+  SEQ:0, ORDER_ID:1, NAME:2, LINE_ID:3, PHONE:4, DATE:5,
+  STATUS:6, ITEM_START:7, ITEM_END:28, TOTAL:29,
+  DUE:30, PAID:31, UNPAID:32, LAST5:33, CONFIRM:34,
+  BRANCH:35, TIME:36, SOURCE:37, DEPOSIT:38,
+  REMIND_TS:39, GIFT:40, REMIND_LOG:41
 };
 
-const STATUS_COLOR = {
-    '付清':'#2e7d32','付訂金':'#e65100','未付':'#d32f2f',
-    '退款待處理':'#1565c0','已取消':'#999'
-};
+// ════════════════════════════════════════════════════════════════════
+// doGet
+// ════════════════════════════════════════════════════════════════════
+function doGet(e) {
+  var userId    = e.parameter.userId    || '';
+  var isPos     = e.parameter.pos       === '1';
+  var posSearch = e.parameter.posSearch || '';
+  var ss        = SpreadsheetApp.getActiveSpreadsheet();
+  var resp      = { lastOrder:null };
 
-let total = 0;
-let qty   = new Array(menuItems.length).fill(0); // 長度現為 22（含松露蘿蔔糕）
-let lastOrder = null, action = 'new', posPayMode = 'none', editPayMode = 'none';
-let isPosMode = false, isEditMode = false;
-let currentEditOrder = null;
-let allOrders = [];
+  if (posSearch || e.parameter.posListAll === '1') {
+    var isAll  = e.parameter.posListAll === '1';
+    var ord2   = ss.getSheetByName(SHEET_NAME);
+    var orders = [];
+    if (ord2) {
+      var rows2 = ord2.getDataRange().getValues();
+      for (var j = rows2.length-1; j >= 2; j--) {
+        var r  = rows2[j];
+        var st = String(r[COL.STATUS]||'');
+        if (st==='已取消'||st==='已隱藏') continue;
 
-// 【修改5】清蒸臭豆腐辣度（預設不辣）
-let stinkTofuSpice = '不辣';
-
-// ══════════════════════════════════════════════════════════
-//  【修改4】動態取貨時間選單
-// ══════════════════════════════════════════════════════════
-function syncTimeOptions(dateElId, timeElId, presetTime) {
-    const date = document.getElementById(dateElId).value;
-    const sel  = document.getElementById(timeElId);
-    const times = PICKUP_TIME_MAP[date] || [];
-    sel.innerHTML = '<option value="">請選擇取貨時間</option>' +
-        times.map(t => `<option value="${t}">${t}</option>`).join('');
-    // 若只有一個時段，自動選取
-    if (times.length === 1) sel.value = times[0];
-    // 若有預填時間，嘗試還原
-    if (presetTime && times.includes(presetTime)) sel.value = presetTime;
-}
-
-// ══════════════════════════════════════════════════════════
-//  【修改1】取貨日前10天限制
-// ══════════════════════════════════════════════════════════
-function daysUntilPickup(dateStr) {
-    if (!dateStr) return 999;
-    const pickup = new Date(dateStr + 'T00:00:00+08:00');
-    return Math.ceil((pickup - Date.now()) / 86400000);
-}
-
-// ══════════════════════════════════════════════════════════
-//  通用驗證表單
-// ══════════════════════════════════════════════════════════
-function validateOrderForm(name, phone, date, time) {
-    if (!name || !phone || !date || !time) {
-        alert('請填寫完整取貨日期、取貨時間、顧客姓名與連絡電話！');
-        return false;
-    }
-    if (!/^09\d{8}$/.test(phone.replace(/[-\s]/g, ''))) {
-        alert('連絡電話格式錯誤，請輸入正確的手機號碼 (例如: 0912345678)！');
-        return false;
-    }
-    return true;
-}
-
-// ══════════════════════════════════════════════════════════
-//  初始化
-// ══════════════════════════════════════════════════════════
-(function init() {
-    const params = new URLSearchParams(location.search);
-    isPosMode = params.get('pos') === '1';
-
-    if (isPosMode) {
-        document.getElementById('headerTitle').innerHTML = '祥和蔬食料理 - 年菜預購 <span class="pos-badge">門市POS</span>';
-        document.getElementById('headerActions').style.display = 'flex';
-        showMenu();
-    } else {
-        const script = document.createElement('script');
-        script.src = 'https://static.line-scdn.net/liff/edge/2/sdk.js';
-        script.onload = function () {
-            liff.init({ liffId: '2009843210-1DLZ73WP' }).then(() => {
-                if (!liff.isLoggedIn()) { liff.login(); }
-                else { loadWithHistory(); }
-            }).catch(err => {
-                document.getElementById('loading').innerText = 'LIFF 初始化失敗：' + err;
-            });
-        };
-        document.head.appendChild(script);
-    }
-})();
-
-function loadWithHistory() {
-    const profile = liff.getDecodedIDToken();
-    fetch(GAS_URL + '?userId=' + profile.sub)
-        .then(r => r.json())
-        .then(res => {
-            if (res.lastOrder) {
-                lastOrder = res.lastOrder;
-                // 【修改1】取貨日前10天不可再加購/減購
-                if (daysUntilPickup(lastOrder.date) <= 10) {
-                    alert('您的訂單取貨日前10天內無法線上加購或減購。\n如需更改請致電門市。您仍可建立新訂單。');
-                    startEdit(false);
-                } else {
-                    document.getElementById('choiceModal').style.display = 'flex';
-                }
-            } else {
-                startEdit(false);
-            }
-        }).catch(() => { document.getElementById('loading').innerText = '載入失敗，請重新整理。'; });
-}
-
-function startEdit(isEdit) {
-    document.getElementById('choiceModal').style.display = 'none';
-    if (isEdit) {
-        action = 'update';
-        const h = lastOrder.items; // 長度 22：h[0..15]=H-W, h[16]=X(松露蘿蔔糕), h[17..21]=Y-AC
-        // 【修改6】重新對應 qty 陣列順序（menuItems 順序）
-        // qty[0..15]  ← h[0..15]
-        // qty[16..20] ← h[17..21]（Y-AC = 松露油飯~酥香蘿蔔糕）
-        // qty[21]     ← h[16]    （X 欄 = 松露蘿蔔糕）
-        qty = h.slice(0,16).concat(h.slice(17,22)).concat([Number(h[16])||0]).map(v=>parseInt(v)||0);
-        document.getElementById('custName').value  = lastOrder.name;
-        document.getElementById('custPhone').value = lastOrder.phone;
-        // 【修改4】預填時也要同步時間選單
-        syncTimeOptions('pickupDate','pickupTime', lastOrder.time);
-        document.getElementById('pickupDate').value = lastOrder.date;
-        syncTimeOptions('pickupDate','pickupTime', lastOrder.time);
-        if (lastOrder.paymentStatus && lastOrder.paymentStatus !== '未付') {
-            document.getElementById('paidNotice').style.display = 'block';
+        var include = isAll;
+        if (!isAll && posSearch) {
+          var ph = String(r[COL.PHONE]).replace(/[\s\-]/g,'');
+          include = (ph === posSearch.replace(/[\s\-]/g,''));
         }
-    } else {
-        action = 'new';
-    }
-    showMenu();
-}
+        if (!include) continue;
 
-function showMenu() {
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('menuList').style.display = 'block';
-    renderMenu();
-    calcTotal();
-    if (!isPosMode) document.getElementById('cartBar').classList.add('show');
-}
+        var timeStr = (r[COL.TIME] instanceof Date)
+          ? Utilities.formatDate(r[COL.TIME],'Asia/Taipei','HH:mm')
+          : String(r[COL.TIME]||'').substring(0,5);
 
-// ══════════════════════════════════════════════════════════
-//  菜單渲染
-// ══════════════════════════════════════════════════════════
-function renderMenu() {
-    const c = document.getElementById('menuList');
-    c.innerHTML = '';
-    menuItems.forEach((item, i) => {
-        const q = qty[i] || 0;
-        const div = document.createElement('div');
-        div.className = 'menu-item';
-
-        // 【修改5】清蒸臭豆腐（index 6）加辣度選項
-        const spiceHtml = (i === 6) ? `
-            <div class="spice-row">
-                辣度：
-                <label><input type="radio" name="spice6" value="不辣"
-                    ${stinkTofuSpice==='不辣'?'checked':''} onchange="stinkTofuSpice=this.value"> 不辣</label>
-                <label><input type="radio" name="spice6" value="小辣"
-                    ${stinkTofuSpice==='小辣'?'checked':''} onchange="stinkTofuSpice=this.value"> 小辣</label>
-            </div>` : '';
-
-        const ctrl = `<div class="qty-controls">
-            <button class="qty-btn" onclick="upd(${i},-1)">-</button>
-            <input class="qty-input" id="q${i}" value="${q}" readonly>
-            <button class="qty-btn" onclick="upd(${i},1)">+</button>
-        </div>`;
-
-        div.innerHTML = `
-            <img src="https://via.placeholder.com/80?text=圖片" alt="${item.name}">
-            <div class="menu-item-info">
-                <div class="menu-item-title">${item.name}</div>
-                <div class="menu-item-price">NT$ ${item.price}</div>
-                ${spiceHtml}
-            </div>${ctrl}`;
-        c.appendChild(div);
-    });
-}
-
-function upd(i, d) {
-    qty[i] = Math.max(0, qty[i] + d);
-    document.getElementById('q' + i).value = qty[i];
-    calcTotal();
-    if (document.getElementById('posModal').style.display === 'flex') updatePosSummary();
-}
-
-function calcTotal() {
-    total = menuItems.reduce((s, item, i) => s + item.price * qty[i], 0);
-    document.getElementById('cartTotal').innerText = '合計: NT$ ' + total;
-    const cartBar = document.getElementById('cartBar');
-    if (isEditMode || !isPosMode) {
-        cartBar.classList.toggle('disabled', total <= 0);
-    }
-}
-
-// ══════════════════════════════════════════════════════════
-//  POS：門市新建訂單
-// ══════════════════════════════════════════════════════════
-function selPay(mode) {
-    posPayMode = mode;
-    ['none','deposit','full'].forEach((m,i) => {
-        document.getElementById('pBtn'+i).classList.toggle('sel', m===mode);
-    });
-    document.getElementById('depWrap').classList.toggle('show', mode==='deposit');
-}
-
-function updatePosSummary() {
-    const items = menuItems.map((item,i) => qty[i]>0 ? `${item.name} × ${qty[i]}` : null).filter(Boolean);
-    document.getElementById('summaryItems').innerHTML = items.join('<br>') || '（尚未選擇）';
-    document.getElementById('summaryTotal').innerText = '總金額：NT$ ' + total;
-    document.getElementById('posSummary').style.display = 'block';
-}
-
-function openPosModal() {
-    if (total <= 0) { alert('餐點數量全為 0，請先選擇餐點！'); return; }
-    selPay('none');
-    updatePosSummary();
-    document.getElementById('posModal').style.display = 'flex';
-}
-
-function submitPosOrder() {
-    if (total <= 0) { alert('餐點數量全為 0，請先選擇餐點！'); return; }
-    const name  = document.getElementById('posCustName').value.trim();
-    const phone = document.getElementById('posCustPhone').value.trim();
-    const date  = document.getElementById('posPickupDate').value;
-    const time  = document.getElementById('posPickupTime').value;
-    if (!validateOrderForm(name, phone, date, time)) return;
-
-    let depAmt=0, payStatus='未付';
-    if (posPayMode==='full')    { payStatus='付清'; depAmt=total; }
-    else if (posPayMode==='deposit') {
-        depAmt = parseInt(document.getElementById('depositAmt').value)||0;
-        if (depAmt<=0)       { alert('請輸入訂金金額！'); return; }
-        if (depAmt>=total)   { alert('訂金不可大於等於總金額，全付請選「全額付清」！'); return; }
-        payStatus = '付訂金';
-    }
-
-    // 【修改5】辣度備註
-    const spiceNote = qty[6]>0 ? `清蒸臭豆腐：${stinkTofuSpice}` : '';
-
-    setBtnState('posSubmitBtn','建立中...',true);
-    fetch(GAS_URL, {
-        method:'POST', mode:'no-cors',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-            userId:'POS_STORE', action:'new', orderId:null,
-            name, phone, branch:'鎮江店', date, time,
-            totalAmount:total, items_qty_array:qty,
-            source:'POS', payStatus, depositAmount:depAmt,
-            spiceNote
-        })
-    }).then(()=>{
-        alert(`門市訂單已建立！\n顧客：${name}\n狀態：${payStatus}`+
-              (depAmt>0&&payStatus!=='付清'?`\n訂金：NT$ ${depAmt}`:''));
-        closeModal('posModal');
-        resetPosForm();
-    }).catch(()=>alert('建立失敗，請稍後再試。'))
-      .finally(()=>setBtnState('posSubmitBtn','✅ 建立門市訂單',false));
-}
-
-// ══════════════════════════════════════════════════════════
-//  POS：訂單管理（搜尋 + 列表）
-// ══════════════════════════════════════════════════════════
-async function openSearchModal() {
-    document.getElementById('searchPhone').value='';
-    document.getElementById('searchStatus').innerText='載入訂單中...';
-    document.getElementById('searchResults').innerHTML='';
-    document.getElementById('searchModal').style.display='flex';
-    try {
-        const res  = await fetch(GAS_URL+'?posListAll=1');
-        const data = await res.json();
-        allOrders  = data.orders || [];
-        renderOrderList(allOrders);
-        document.getElementById('searchStatus').innerText=`共 ${allOrders.length} 筆訂單`;
-    } catch(e) {
-        document.getElementById('searchStatus').innerText='⚠️ 載入失敗，請關閉後重試';
-    }
-}
-
-function doSearch() {
-    const last3 = document.getElementById('searchPhone').value.trim();
-    if (!last3) {
-        renderOrderList(allOrders);
-        document.getElementById('searchStatus').innerText=`共 ${allOrders.length} 筆訂單`;
-        return;
-    }
-    const filtered = allOrders.filter(o=>{
-        const p = String(o.phone||'').replace(/[\s\-]/g,'');
-        return p.endsWith(last3);
-    });
-    document.getElementById('searchStatus').innerText =
-        filtered.length>0?`末三碼「${last3}」找到 ${filtered.length} 筆`:`末三碼「${last3}」查無結果`;
-    renderOrderList(filtered);
-}
-
-function renderOrderList(orders) {
-    const container = document.getElementById('searchResults');
-    if (!orders.length) {
-        container.innerHTML='<p style="text-align:center;color:#bbb;padding:24px 0;font-size:.95em;">沒有符合的訂單</p>';
-        return;
-    }
-    container.innerHTML = orders.map(o=>{
-        const color    = STATUS_COLOR[o.status]||'#666';
-        const phoneTail= o.phone?'末四碼 '+String(o.phone).replace(/[\s\-]/g,'').slice(-4):'';
-        const paidInfo = o.paid>0?`　已付：NT$ ${o.paid}`:'';
-        // 【修改1】取貨日前10天顯示鎖定
-        const locked   = daysUntilPickup(o.date) <= 10;
-        const editBtn  = locked
-            ? `<button class="btn-edit" style="background:#aaa;cursor:default;" disabled title="取貨日前10天無法修改">🔒 已鎖定</button>`
-            : `<button class="btn-edit" onclick='doEditOrder(${JSON.stringify(o).replace(/'/g,"&#39;")})'>✏️ 編輯</button>`;
-        return `<div class="order-card">
-            <div class="order-card-top">
-                <div>
-                    <div class="order-card-name">#${o.orderId}　${o.name}</div>
-                    <div class="order-card-meta">📱 ${phoneTail}　📅 ${o.date}</div>
-                </div>
-                <span class="status-tag" style="color:${color};border:1px solid ${color};background:${color}1a;">${o.status}</span>
-            </div>
-            <div class="order-card-amount">💰 總額：NT$ ${o.total}${paidInfo}</div>
-            <div class="order-card-actions">
-                ${editBtn}
-                <button class="btn-hide" onclick="confirmHideOrder('${o.orderId}','${escHtml(o.name)}')">🗑 隱藏</button>
-            </div>
-        </div>`;
-    }).join('');
-}
-
-// ── 編輯第一步：載入數量回菜單
-function doEditOrder(order) {
-    // 【修改1】取貨日前10天禁止修改
-    if (daysUntilPickup(order.date) <= 10) {
-        alert(`⚠️ 訂單 #${order.orderId} 的取貨日前10天內無法加購或減購！\n取貨日：${order.date}\n如需調整請直接聯繫顧客或於試算表手動修改。`);
-        return;
-    }
-
-    currentEditOrder = order;
-    isEditMode = true;
-    closeModal('searchModal');
-
-    const items = order.items; // 22 個元素：items[0..15]=H-W, items[16]=X欄(松露蘿蔔糕), items[17..21]=Y-AC
-    // 【修改6】對應回 menuItems 順序（qty[21] = 松露蘿蔔糕 = items[16]）
-    qty = items.slice(0,16)
-               .concat(items.slice(17,22))
-               .concat([Number(items[16])||0])
-               .map(v=>parseInt(v)||0);
-    renderMenu();
-
-    document.getElementById('editBanner').style.display='block';
-    document.getElementById('editBannerText').innerText=`✏️ 編輯模式 — 訂單 #${order.orderId}（${order.name}）`;
-
-    const cartBar = document.getElementById('cartBar');
-    cartBar.classList.add('show');
-    cartBar.onclick = openEditInfoModal;
-    const btn = document.getElementById('cartBtnText');
-    btn.innerText='下一步：填寫資訊 ➔';
-    btn.className='cart-btn-text blue';
-    calcTotal();
-}
-
-// POS 加訂收款模式切換
-function selEditPay(mode) {
-    editPayMode = mode;
-    ['none','deposit','full'].forEach((m,i)=>{
-        document.getElementById('epBtn'+i).classList.toggle('sel',m===mode);
-    });
-    document.getElementById('editDepWrap').classList.toggle('show',mode==='deposit');
-}
-
-// ── 編輯第二步：填寫訂購資訊 Modal
-function openEditInfoModal() {
-    if (total<=0) { alert('餐點數量全為 0，請先選擇餐點！'); return; }
-
-    const o      = currentEditOrder;
-    const newT   = total;
-    const oldT   = Number(o.total)||0;
-    const oldPaid= Number(o.paid)||0;
-    const oldSt  = String(o.status||'');
-
-    document.getElementById('editInfoTitle').innerText=`✏️ 修改訂單 #${o.orderId}`;
-
-    // ── 差額說明 ──
-    let diffNote='';
-    // 【修改1】退款待處理 + 加購總金額 > 已付金額 → 需員工審核
-    if (oldSt==='退款待處理' && newT > oldPaid) {
-        const needPay   = newT - oldPaid;
-        const oldRefund = Math.abs(Number(o.unpaid)||0);
-        diffNote = `<br>🔄 此訂單原為退款待處理（待退 NT$ ${oldRefund}）`+
-                   `<br>🔺 加購後需補繳：<strong style="color:#e65100;">NT$ ${needPay}</strong>`+
-                   `<br><span style="color:#7b1fa2;font-weight:bold;">⚠️ 將傳送員工LINE審核，同意後方可成立</span>`;
-    } else if (newT>oldT) {
-        diffNote=`<br>🔺 追加差額：<strong style="color:#e65100;">NT$ ${newT-oldT}</strong>`;
-    } else if (newT<oldT) {
-        // 【修改2】少訂 → 退款，功能維持原樣
-        diffNote=`<br>🔻 減少金額：<strong style="color:#1565c0;">NT$ ${oldT-newT}</strong>（將通知員工退款）`;
-    }
-
-    document.getElementById('editInfoSummary').innerHTML=
-        `顧客：<strong>${o.name}</strong><br>`+
-        `原金額：NT$ ${oldT} → 新金額：<strong style="color:#8b0000;">NT$ ${newT}</strong>${diffNote}`;
-
-    // ── POS 現場收款區塊（一般加訂，非退款轉加訂）──
-    const isRefundAdd = (oldSt==='退款待處理' && newT>oldPaid);
-    if (o.source==='POS' && newT>oldT && !isRefundAdd) {
-        const newUnpaid = newT - oldPaid;
-        document.getElementById('editPaymentSection').style.display='block';
-        document.getElementById('editPaymentTitle').innerText=`💰 待收金額：NT$ ${newUnpaid}`;
-        selEditPay('none');
-    } else {
-        document.getElementById('editPaymentSection').style.display='none';
-        editPayMode='none';
-    }
-
-    // 【修改4】預填日期並同步時間選單
-    document.getElementById('editPickupDate').value = o.date||'';
-    syncTimeOptions('editPickupDate','editPickupTime', o.time||'');
-    document.getElementById('editCustName').value  = o.name||'';
-    document.getElementById('editCustPhone').value = o.phone||'';
-
-    document.getElementById('editInfoModal').style.display='flex';
-}
-
-// ── 編輯第三步：送出修改
-function submitEditOrder() {
-    const name  = document.getElementById('editCustName').value.trim();
-    const phone = document.getElementById('editCustPhone').value.trim();
-    const date  = document.getElementById('editPickupDate').value;
-    const time  = document.getElementById('editPickupTime').value;
-    if (!validateOrderForm(name,phone,date,time)) return;
-
-    const o       = currentEditOrder;
-    const newT    = total;
-    const oldT    = Number(o.total)||0;
-    const oldPaid = Number(o.paid)||0;
-    const oldSt   = String(o.status||'');
-
-    // 【修改1】退款待處理 + 新金額 > 已付 → 傳送員工審核旗標
-    const isRefundAdd = (oldSt==='退款待處理' && newT>oldPaid);
-
-    let posCollectedAmt=0, posEditMode=false;
-    if (!isRefundAdd && document.getElementById('editPaymentSection').style.display==='block') {
-        posEditMode=true;
-        const newUnpaid = newT - oldPaid;
-        if (editPayMode==='full') {
-            posCollectedAmt = newUnpaid;
-        } else if (editPayMode==='deposit') {
-            posCollectedAmt = parseInt(document.getElementById('editDepositAmt').value)||0;
-            if (posCollectedAmt<=0)          { alert('請輸入收取金額！'); return; }
-            if (posCollectedAmt>=newUnpaid)  { alert('收取金額不可大於等於待收餘額，全付請選「全額付清」！'); return; }
-        }
-    }
-
-    let modDesc;
-    if (isRefundAdd) {
-        modDesc=`退款訂單加購（需員工審核），補繳差額 NT$ ${newT-oldPaid}`;
-    } else if (newT===oldT) {
-        modDesc='金額不變，更新內容';
-    } else if (newT>oldT) {
-        modDesc=`加訂，需追加 NT$ ${newT-oldT}`;
-    } else {
-        modDesc=`少訂，需退款 NT$ ${oldT-newT}`;
-    }
-
-    if (!confirm(`確認修改訂單 #${o.orderId}？\n顧客：${name}\n${modDesc}`)) return;
-
-    // 【修改5】辣度備註
-    const spiceNote = qty[6]>0 ? `清蒸臭豆腐：${stinkTofuSpice}` : '';
-
-    setBtnState('editSubmitBtn','送出中...',true);
-    fetch(GAS_URL, {
-        method:'POST', mode:'no-cors',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-            userId:       o.lineId||'POS_STORE',
-            action:       'update',
-            orderId:      o.orderId,
-            name, phone, branch:'鎮江店', date, time,
-            totalAmount:  newT,
-            items_qty_array: qty,
-            source:       'POS',
-            payStatus:    o.status,
-            posEditMode,
-            posCollectedAmt,
-            fromRefundStatus: isRefundAdd,  // 【修改1】傳遞旗標給後端
-            spiceNote
-        })
-    }).then(()=>{
-        const idx=allOrders.findIndex(x=>String(x.orderId)===String(o.orderId));
-        if (idx!==-1) allOrders[idx]={...allOrders[idx],name,phone,date,time,total:newT,paid:oldPaid+posCollectedAmt};
-        if (isRefundAdd) {
-            alert(`加購申請已送出！\n員工收到 LINE 通知後審核，\n同意後顧客將收到補繳差額通知。`);
-        } else {
-            alert(`訂單 #${o.orderId} 修改完成！\n${modDesc}`);
-        }
-        closeModal('editInfoModal');
-        exitEditMode();
-    }).catch(()=>alert('送出失敗，請稍後再試。'))
-      .finally(()=>setBtnState('editSubmitBtn','✅ 確認修改訂單',false));
-}
-
-// ── 取消編輯
-function exitEditMode() {
-    isEditMode=false; currentEditOrder=null;
-    document.getElementById('editBanner').style.display='none';
-    const cartBar=document.getElementById('cartBar');
-    cartBar.classList.remove('show');
-    cartBar.onclick=openCart;
-    const btn=document.getElementById('cartBtnText');
-    btn.innerText='填寫訂單 ➔';
-    btn.className='cart-btn-text';
-    resetMenuState();
-}
-
-// ── 隱藏訂單
-function confirmHideOrder(orderId,name) {
-    if (!confirm(`確認隱藏訂單 #${orderId}（${name}）？\n\n此操作不會永久刪除，\n可在 Google Sheet 中將 G 欄狀態改回「未付」復原。`)) return;
-    fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({action:'hide',orderId,source:'POS'})
-    }).then(()=>{
-        allOrders=allOrders.filter(o=>String(o.orderId)!==String(orderId));
-        doSearch();
-        alert(`訂單 #${orderId} 已隱藏。`);
-    }).catch(()=>alert('操作失敗，請稍後再試。'));
-}
-
-// ══════════════════════════════════════════════════════════
-//  一般顧客訂單（LIFF）
-// ══════════════════════════════════════════════════════════
-function openCart() {
-    if (total>0) document.getElementById('orderModal').style.display='flex';
-    else alert('購物車是空的，請先選擇餐點唷！');
-}
-
-function submitOrder() {
-    if (total<=0) { alert('餐點數量全為 0，請先選擇餐點！'); return; }
-
-    // 【修改1】LIFF 修改訂單：取貨日前10天禁止
-    if (action==='update' && lastOrder && daysUntilPickup(lastOrder.date)<=10) {
-        alert('您的訂單取貨日前10天內無法線上加購或減購。\n如需修改請致電門市，謝謝！');
-        return;
-    }
-
-    const name  = document.getElementById('custName').value.trim();
-    const phone = document.getElementById('custPhone').value.trim();
-    const date  = document.getElementById('pickupDate').value;
-    const time  = document.getElementById('pickupTime').value;
-    if (!validateOrderForm(name,phone,date,time)) return;
-
-    const spiceNote = qty[6]>0 ? `清蒸臭豆腐：${stinkTofuSpice}` : '';
-
-    setBtnState('submitBtn','訂單傳送中...',true);
-    liff.getProfile().then(profile=>{
-        return fetch(GAS_URL,{
-            method:'POST', mode:'no-cors',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({
-                userId:      profile.userId,
-                action,
-                orderId:     action==='update'?lastOrder.orderId:null,
-                name, phone, branch:'鎮江店', date, time,
-                totalAmount: total,
-                items_qty_array: qty,
-                source:      'LINE',
-                spiceNote
-            })
+        orders.push({
+          orderId: r[COL.ORDER_ID],
+          name:    r[COL.NAME],
+          // 【修改3】確保電話以字串回傳，保留開頭 0
+          phone:   String(r[COL.PHONE]||''),
+          lineId:  r[COL.LINE_ID],
+          date:    fmtDate(r[COL.DATE],'yyyy-MM-dd'),
+          time:    timeStr,
+          status:  st,
+          source:  String(r[COL.SOURCE]||''),
+          total:   Number(r[COL.TOTAL])  ||0,
+          paid:    Number(r[COL.PAID])   ||0,
+          unpaid:  Number(r[COL.UNPAID]) ||0,
+          deposit: Number(r[COL.DEPOSIT])||0,
+          items:   r.slice(COL.ITEM_START, COL.ITEM_END+1) // 22 個元素
         });
-    }).then(()=>{
-        alert(action==='update'?'訂單已成功修改！請留意官方帳號訊息。':'訂單已成功送出！請留意官方帳號訊息。');
-        liff.closeWindow();
-    }).catch(()=>{
-        alert('送出失敗，請稍後再試。');
-        setBtnState('submitBtn','確認送出訂單',false);
-    });
+        if (!isAll && orders.length>=3)   break;
+        if ( isAll && orders.length>=300)  break;
+      }
+    }
+    return toJson({orders:orders});
+  }
+
+  if (isPos||!userId) return toJson(resp);
+
+  var ord = ss.getSheetByName(SHEET_NAME);
+  if (ord) {
+    var rows = ord.getDataRange().getValues();
+    for (var j=rows.length-1; j>=2; j--) {
+      var r=rows[j];
+      if (String(r[COL.LINE_ID])===userId && r[COL.STATUS]!=='已取消') {
+        var ts2=(r[COL.TIME] instanceof Date)
+          ? Utilities.formatDate(r[COL.TIME],'Asia/Taipei','HH:mm')
+          : String(r[COL.TIME]||'').substring(0,5);
+        resp.lastOrder={
+          row:j+1, orderId:r[COL.ORDER_ID], name:r[COL.NAME],
+          phone:  String(r[COL.PHONE]||''),  // 【修改3】
+          date:   fmtDate(r[COL.DATE],'yyyy-MM-dd'),
+          time:   ts2, paymentStatus:r[COL.STATUS],
+          deposit:Number(r[COL.DEPOSIT])||0,
+          paid:   Number(r[COL.PAID])||0,
+          items:  r.slice(COL.ITEM_START, COL.ITEM_END+1)
+        };
+        break;
+      }
+    }
+  }
+  return toJson(resp);
 }
 
-// ══════════════════════════════════════════════════════════
-//  工具函式
-// ══════════════════════════════════════════════════════════
-function closeModal(id){document.getElementById(id).style.display='none';}
-function setBtnState(id,txt,disabled){const b=document.getElementById(id);b.innerText=txt;b.disabled=disabled;}
-function resetMenuState(){qty=new Array(menuItems.length).fill(0);renderMenu();calcTotal();}
-function resetPosForm(){
-    ['posCustName','posCustPhone'].forEach(id=>document.getElementById(id).value='');
-    document.getElementById('posPickupDate').value='';
-    document.getElementById('posPickupTime').innerHTML='<option value="">請先選擇日期</option>';
-    resetMenuState();
+// ════════════════════════════════════════════════════════════════════
+// doPost
+// ════════════════════════════════════════════════════════════════════
+function doPost(e) {
+  if (!e||!e.postData||!e.postData.contents) return ContentService.createTextOutput('OK');
+  try {
+    var d = JSON.parse(e.postData.contents);
+    if (d.events && d.events.length>0) {
+      var ev=d.events[0];
+      if (ev.type==='postback')                        return handlePostback(ev);
+      if (ev.type==='message'&&ev.message.type==='text') return handleWebhook(ev);
+      return ContentService.createTextOutput('OK');
+    }
+    if (d.action==='hide') {
+      var sht  = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+      var rows = sht.getDataRange().getValues();
+      for (var i=0; i<rows.length; i++) {
+        if (String(rows[i][COL.ORDER_ID])===String(d.orderId)) {
+          sht.getRange(i+1,COL.STATUS+1).setValue('已隱藏');
+          try {
+            sendTwilio(String(rows[i][COL.PHONE]),
+              '「祥和蔬食」'+String(rows[i][COL.NAME])+'您好！訂單#'+d.orderId+
+              '因故已取消，如有疑問請來電洽詢門市，造成不便敖請見諒，謝謝！');
+          } catch(dse){ Logger.log('隱藏訂單SMS失敗:'+dse); }
+          break;
+        }
+      }
+      return ContentService.createTextOutput('OK');
+    }
+    if (d.userId && d.items_qty_array) return handleOrder(d);
+    return ContentService.createTextOutput('OK');
+  } catch(err) {
+    Logger.log('doPost err:'+err);
+    // 錯誤直接 push 給員工，不需登入 Apps Script 也能看到
+    try {
+      STAFF_LINE_IDS.forEach(function(sid){
+        pushMsg(sid, '🔴 [系統錯誤] doPost\n'+err.toString().substring(0,200));
+      });
+    } catch(ne){}
+    return toJson({status:'error',message:err.toString()});
+  }
 }
-function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/'/g,"&#39;").replace(/"/g,'&quot;');}
-</script>
-</body>
-</html>
+
+// ════════════════════════════════════════════════════════════════════
+// ★ Postback 處理（員工點擊 Flex Message 按鈕）
+// ════════════════════════════════════════════════════════════════════
+function handlePostback(ev) {
+  var params  = parseQS(ev.postback.data);
+  var token   = ev.replyToken;
+  var act     = params.act   || '';
+  var oid     = params.oid   || '';
+  var cuid    = params.cuid  || '';
+  var amt     = Number(params.amt)  || 0;
+  var diff    = Number(params.diff) || 0;
+  var mtype   = params.mtype || '';
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  var data  = sheet.getDataRange().getValues();
+  var tRow  = -1;
+  for (var i=0; i<data.length; i++) {
+    if (String(data[i][COL.ORDER_ID])===String(oid)) { tRow=i+1; break; }
+  }
+
+  // ── 確認收款 ──
+  if (act==='pay_ok') {
+    if (tRow!==-1) {
+      var ep   = Number(data[tRow-1][COL.PAID])||0;
+      var accP = ep + amt;
+      sheet.getRange(tRow,COL.CONFIRM+1).setValue(true);
+      sheet.getRange(tRow,COL.STATUS +1).setValue('付清');
+      sheet.getRange(tRow,COL.PAID   +1).setValue(accP);
+      sheet.getRange(tRow,COL.UNPAID +1).setValue(0);
+    }
+    var fp = tRow!==-1 ? (Number(data[tRow-1][COL.PAID])||0)+amt : amt;
+    replyMsg(token,'✅ 已標記訂單 #'+oid+' 付清！\n累計已付：NT$ '+fp+'\n感謝確認！');
+    if (cuid.startsWith('U')) {
+      var cn  = tRow!==-1?data[tRow-1][COL.NAME]:'顧客';
+      var ct2 = tRow!==-1?Number(data[tRow-1][COL.TOTAL])||0:0;
+      pushMsg(cuid,'🎉 '+cn+' 您好！\n\n訂單 #'+oid+' 款項已全數確認！\n💰 訂單總額：NT$ '+ct2+'\n✅ 付款完成！\n\n感謝您的訂購，取貨時見！😊');
+    }
+  }
+  // ── 未收到款 ──
+  else if (act==='pay_no') {
+    if (tRow!==-1) {
+      var cl5 = String(data[tRow-1][COL.LAST5]||'');
+      if (cl5) {
+        var codes=cl5.split(' / ').map(function(c){return c.trim();});
+        if (codes.length>1) { codes.pop(); sheet.getRange(tRow,COL.LAST5+1).setValue(codes.join(' / ')); }
+        else                { sheet.getRange(tRow,COL.LAST5+1).setValue(''); }
+      }
+    }
+    replyMsg(token,'⚠️ 已記錄訂單 #'+oid+' 尚未收到款。\n最新一筆後五碼已刪除，顧客可重新回報。');
+    if (cuid.startsWith('U')) {
+      pushMsg(cuid,'⚠️ 您好，我們查詢後尚未確認收到您的匯款。\n\n訂單 #'+oid+'\n請確認帳號後五碼是否正確，\n確認後請重新回覆後五碼給我們，謝謝！');
+    }
+  }
+  // ── 同意加訂（一般）──
+  else if (act==='mod_add_ok') {
+    if (tRow!==-1) {
+      sheet.getRange(tRow,COL.STATUS +1).setValue('付訂金');
+      sheet.getRange(tRow,COL.UNPAID +1).setValue(diff);
+      sheet.getRange(tRow,COL.CONFIRM+1).setValue(false);
+    }
+    replyMsg(token,'✅ 已確認加訂！\n訂單 #'+oid+'\n追加差額 NT$'+diff+' 已通知顧客。\n（確認已重置，等顧客回報後五碼後再按確認收款）');
+    if (cuid.startsWith('U')) {
+      pushMsg(cuid,'📋 您的年菜加訂已確認！\n\n訂單 #'+oid+'\n🔺 需追加繳費：NT$ '+diff+'\n\n請盡速匯款，匯款後回覆「帳號後五碼」，謝謝！');
+    }
+  }
+  // ── 【修改1】退款待處理訂單加購 → 員工同意 ──
+  else if (act==='mod_refund_add_ok') {
+    if (tRow!==-1) {
+      var curTot  = Number(data[tRow-1][COL.TOTAL])||0;
+      var curPaid = Number(data[tRow-1][COL.PAID]) ||0;
+      var needPay = Math.max(0, curTot - curPaid);
+      var newSt   = needPay>0 ? '付訂金' : '付清';
+      // 清空退款，改為待收差額
+      sheet.getRange(tRow,COL.STATUS +1).setValue(newSt);
+      sheet.getRange(tRow,COL.UNPAID +1).setValue(needPay);
+      sheet.getRange(tRow,COL.CONFIRM+1).setValue(false);
+    }
+    replyMsg(token,
+      '✅ 已同意退款訂單轉加購！\n訂單 #'+oid+
+      '\n退款已取消，顧客需補繳 NT$ '+diff+'，已發送通知。\n'+
+      '（等顧客回報後五碼後再按確認收款）');
+    if (cuid.startsWith('U')) {
+      pushMsg(cuid,
+        '📋 您的加購申請已獲員工確認！\n\n訂單 #'+oid+
+        '\n🔄 原退款已取消\n🔺 需補繳差額：NT$ '+diff+
+        '\n\n請盡速匯款，匯款後回覆「帳號後五碼」，謝謝！');
+    }
+  }
+  // ── 【修改1】退款待處理訂單加購 → 員工拒絕 ──
+  else if (act==='mod_refund_add_reject') {
+    // 拒絕：將訂單恢復成退款待處理（新金額已寫入，需還原）
+    if (tRow!==-1) {
+      var oldTotRestore = Number(params.oldTotal)||0;
+      var paidRestore   = Number(data[tRow-1][COL.PAID])||0;
+      if (oldTotRestore>0) {
+        var refundRestore = Math.max(0, paidRestore-oldTotRestore);
+        sheet.getRange(tRow,COL.TOTAL +1).setValue(oldTotRestore);
+        sheet.getRange(tRow,COL.STATUS+1).setValue('退款待處理');
+        sheet.getRange(tRow,COL.UNPAID+1).setValue(-refundRestore);
+      }
+    }
+    replyMsg(token,'❌ 已拒絕訂單 #'+oid+' 的加購申請，訂單恢復退款待處理。');
+    if (cuid.startsWith('U')) {
+      pushMsg(cuid,
+        '⚠️ 您的加購申請未獲核准。\n\n訂單 #'+oid+
+        '\n訂單仍維持退款待處理狀態。\n如有疑問請聯繫門市，謝謝！');
+    }
+  }
+  // ── 同意少訂/取消退款 ──（【修改2】維持原有退款功能）
+  else if (act==='mod_refund_ok') {
+    if (tRow!==-1) {
+      var paidSoFar = Number(data[tRow-1][COL.PAID]) ||0;
+      var newTotNow = Number(data[tRow-1][COL.TOTAL])||0;
+      var refundAmt = Math.max(0, paidSoFar-newTotNow);
+      if (mtype==='cancel') {
+        sheet.getRange(tRow,COL.STATUS+1).setValue('已取消');
+        sheet.getRange(tRow,COL.UNPAID+1).setValue(0);
+      } else {
+        sheet.getRange(tRow,COL.STATUS+1).setValue('退款待處理');
+        sheet.getRange(tRow,COL.UNPAID+1).setValue(-refundAmt);
+      }
+      sheet.getRange(tRow,COL.CONFIRM+1).setValue(true);
+    }
+    var lbl2 = mtype==='cancel'?'取消訂單':'少訂修改';
+    replyMsg(token,'✅ 已確認'+lbl2+'！\n訂單 #'+oid+'\n退款金額：NT$ '+diff+'\n請安排退款給顧客。\n（退款完成後請手動將G欄改為「付清」）');
+    if (cuid.startsWith('U')) {
+      pushMsg(cuid,'📋 您的訂單修改（'+lbl2+'）已確認。\n\n訂單 #'+oid+'\n🔻 退款金額：NT$ '+diff+'\n\n退款將由門市人員安排，\n如有疑問請聯繫門市，謝謝！');
+    }
+  }
+  // ── 拒絕修改 ──
+  else if (act==='mod_reject') {
+    replyMsg(token,'❌ 已拒絕訂單 #'+oid+' 的修改，維持原訂單。');
+    if (cuid.startsWith('U')) {
+      pushMsg(cuid,'⚠️ 您的年菜訂單修改申請未被受理。\n\n訂單 #'+oid+'\n原因：訂單已進入備餐階段無法修改。\n如有疑問請聯繫門市，謝謝！');
+    }
+  }
+  return ContentService.createTextOutput('OK');
+}
+
+// ════════════════════════════════════════════════════════════════════
+// LINE Webhook 文字訊息
+// ════════════════════════════════════════════════════════════════════
+function handleWebhook(ev) {
+  var raw=ev.message.text.trim(), userId=ev.source.userId, token=ev.replyToken;
+  if (/查詢|訂單|order/i.test(raw)) {
+    queryAndReply(userId,token);
+  } else {
+    var last5=extractLast5(raw);
+    if (last5) {
+      handleLast5(userId,last5,token);
+    } else {
+      replyMsg(token,
+        '您好！請問需要什麼協助？\n\n'+
+        '📋 輸入「查詢訂單」→ 查看訂單\n'+
+        '💳 匯款後回覆後五碼 → 例如：12345\n'+
+        '   或輸入「匯款後五碼 12345」\n\n'+
+        '如需重新預購請點選下方選單。');
+    }
+  }
+  return ContentService.createTextOutput('OK');
+}
+
+function extractLast5(text) {
+  var t=text.replace(/[\s\u3000]/g,'');
+  if (/^\d{5}$/.test(t)) return t;
+  var kw=[
+    /(?:後五碼|後5碼|末五碼|末5碼|後五|後5|五碼|5碼)[：:\-=＝]?(\d{5})/,
+    /(?:帳號|帳戶|轉帳|匯款|付款|繳費|匯)[^\d]*(\d{5})/,
+    /(\d{5})(?:號|碼|$)/,/[：:\-=＝](\d{5})/
+  ];
+  for (var i=0;i<kw.length;i++){var m=t.match(kw[i]);if(m)return m[1];}
+  var m2=text.match(/(?<!\d)(\d{5})(?!\d)/);
+  if (m2) return m2[1];
+  return null;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 後五碼處理
+// ════════════════════════════════════════════════════════════════════
+function handleLast5(userId,last5,token) {
+  var sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  var data=sheet.getDataRange().getValues();
+  var tRow=-1, matchType='';
+
+  for (var i=data.length-1; i>=2; i--) {
+    var r=data[i];
+    if (String(r[COL.LINE_ID])!==userId) continue;
+    if (r[COL.STATUS]==='已取消') continue;
+    var st=String(r[COL.STATUS]||'未付');
+    var unpaid=Number(r[COL.UNPAID])||0;
+    var confirm=r[COL.CONFIRM];
+    if (confirm!==true&&(st==='未付'||st==='付訂金')){tRow=i+1;matchType='normal';break;}
+    if (confirm===true&&st==='付訂金'&&unpaid>0&&tRow===-1){tRow=i+1;matchType='additional';}
+  }
+
+  if (tRow===-1) {
+    replyMsg(token,'找不到待確認的訂單。\n\n可能原因：\n① 訂單已全部確認完成\n② 尚未建立訂單\n\n請輸入「查詢訂單」確認狀態，或聯繫門市。');
+    return;
+  }
+
+  var row=data[tRow-1];
+  var orderId=row[COL.ORDER_ID], name=row[COL.NAME];
+  var total=Number(row[COL.TOTAL])||0, deposit=Number(row[COL.DEPOSIT])||0;
+  var status=String(row[COL.STATUS]||'未付');
+  var empUnpaid=row[COL.UNPAID], existingLast5=String(row[COL.LAST5]||'');
+
+  var due;
+  if (empUnpaid!==''&&empUnpaid!==undefined&&!isNaN(Number(empUnpaid))&&Number(empUnpaid)>0) due=Number(empUnpaid);
+  else if (status==='付訂金'&&deposit>0) due=total-deposit;
+  else if (status==='付清') due=0;
+  else due=total;
+
+  var newLast5Value;
+  if (existingLast5) {
+    var ec=existingLast5.split(' / ').map(function(c){return c.trim();});
+    newLast5Value = ec.indexOf(last5)===-1 ? existingLast5+' / '+last5 : existingLast5;
+  } else {
+    newLast5Value=last5;
+  }
+  sheet.getRange(tRow,COL.LAST5+1).setValue(newLast5Value);
+  if (matchType==='additional') sheet.getRange(tRow,COL.CONFIRM+1).setValue(false);
+
+  var dueStr=due>0?'NT$ '+due:'（請與門市確認）';
+  var addNote=matchType==='additional'?'\n\n📌 此為加訂追加款項，我們將再次為您確認。':'';
+
+  // ── 先通知員工，再 reply（確保錯誤能透過 reply 傳遞給你） ──
+  var staffDebug = notifyStaff(orderId, name, userId, total, last5, due, status);
+
+  // 若員工通知出現問題，把診斷訊息附在回覆裡，讓你直接看到
+  var debugNote = '';
+  if (staffDebug && staffDebug.indexOf('❌') !== -1) {
+    debugNote = '\n\n──── 員工通知診斷 ────\n' + staffDebug;
+  }
+
+  replyMsg(token,
+    '✅ 已收到您的匯款通知！\n\n📦 訂單編號：'+orderId+'\n💳 帳號後五碼：'+last5+'\n💰 確認金額：'+dueStr+
+    addNote+'\n\n我們將盡快核對帳戶，確認後會再通知您。\n謝謝 '+name+' 的耐心等候！'+debugNote);
+}
+
+// ★ 員工 LINE ID（寫死）
+var STAFF_LINE_IDS = ['U06237c1723e064b0620982207f4651d1'];
+
+function notifyStaff(orderId, custName, custLineId, total, last5, due, status) {
+  var flexMsg = buildPaymentFlexMsg(orderId, custName, custLineId, total, last5, due, status);
+  var debugLines = [];
+  STAFF_LINE_IDS.forEach(function(staffId) {
+    // ── 嘗試發送 Flex Message ──
+    var flexOk = pushFlex(staffId, flexMsg);
+    if (flexOk) {
+      debugLines.push('✅ Flex OK → '+staffId.substring(0,8)+'...');
+      return;
+    }
+    // ── Flex 失敗：改發純文字 ──
+    var txtPayload = '📢 匯款待確認\n顧客：'+custName+'\n訂單：#'+orderId+'\n金額：NT$ '+total+'\n應付：NT$ '+due+'\n後五碼：'+last5;
+    var txtErr = pushMsg(staffId, txtPayload);
+    if (txtErr === '') {
+      debugLines.push('⚠️ Flex失敗，純文字OK → '+staffId.substring(0,8)+'...');
+    } else {
+      // 兩種方式都失敗：記錄完整錯誤
+      debugLines.push('❌ 員工通知完全失敗\nstaffId:'+staffId+'\nFlexErr(見上方log)\nPushErr:'+txtErr);
+    }
+  });
+  return debugLines.join('\n');  // 回傳診斷字串給 handleLast5
+}
+
+function buildPaymentFlexMsg(orderId,custName,custLineId,total,last5,due,status) {
+  var note=status==='付訂金'?'（已付訂金，確認餘款）':'';
+  return {
+    type:'flex',altText:'【匯款待確認】訂單#'+orderId+'，顧客：'+custName,
+    contents:{
+      type:'bubble',
+      header:{type:'box',layout:'vertical',paddingAll:'12px',backgroundColor:'#8b0000',
+        contents:[{type:'text',text:'📢 匯款待確認通知',weight:'bold',size:'lg',color:'#ffffff'}]},
+      body:{type:'box',layout:'vertical',spacing:'sm',contents:[
+        fRow('👤 顧客',custName),fRow('📦 訂單編號','#'+orderId),
+        fRow('💰 總金額','NT$ '+total),fRow('💳 本次應付','NT$ '+due+note),
+        fRow('🔢 後五碼',last5),
+        {type:'separator',margin:'md'},
+        {type:'text',text:'請至 Google Sheet 確認款項後點擊按鈕。',wrap:true,size:'sm',color:'#888888',margin:'md'}
+      ]},
+      footer:{type:'box',layout:'horizontal',spacing:'sm',contents:[
+        {type:'button',style:'primary',color:'#2e7d32',
+          action:{type:'postback',label:'✅ 確認收款',data:'act=pay_ok&oid='+orderId+'&cuid='+custLineId+'&amt='+due}},
+        {type:'button',style:'secondary',
+          action:{type:'postback',label:'❌ 未收到款',data:'act=pay_no&oid='+orderId+'&cuid='+custLineId}}
+      ]}
+    }
+  };
+}
+
+function notifyStaffOrderModified(orderId,custName,custLineId,oldTotal,newTotal,modType,paidAmt) {
+  var diff=Math.abs(newTotal-oldTotal);
+  var flexMsg=buildModifyFlexMsg(orderId,custName,custLineId,oldTotal,newTotal,diff,modType,paidAmt);
+  STAFF_LINE_IDS.forEach(function(staffId) {
+    var ok = pushFlex(staffId, flexMsg);
+    if (!ok) {
+      var lbl={add:'加訂',reduce:'少訂',cancel:'取消訂單'}[modType]||modType;
+      try {
+        pushMsg(staffId,
+          '⚠️ [Flex失敗，文字通知]\n' +
+          '📋 訂單修改（'+lbl+'）\n' +
+          '顧客：'+custName+'\n' +
+          '訂單：#'+orderId+'\n' +
+          '原金額：NT$ '+oldTotal+'\n' +
+          '新金額：NT$ '+newTotal+'\n' +
+          (modType==='add'?'追加：NT$ '+diff:'退款：NT$ '+diff)
+        );
+      } catch(e2){ Logger.log('notifyStaffOrderModified fallback失敗:'+e2); }
+    }
+  });
+}
+
+function buildModifyFlexMsg(orderId,custName,custLineId,oldTotal,newTotal,diff,modType,paidAmt) {
+  var lbl={add:'加訂',reduce:'少訂',cancel:'取消訂單'}[modType]||modType;
+  var diffLabel=modType==='add'?'追加差額：NT$ '+diff:'退款金額：NT$ '+diff;
+  var hColor=modType==='add'?'#1565c0':(modType==='cancel'?'#c62828':'#e65100');
+  var pbOk=modType==='add'
+    ?'act=mod_add_ok&oid='+orderId+'&cuid='+custLineId+'&diff='+diff+'&mtype='+modType
+    :'act=mod_refund_ok&oid='+orderId+'&cuid='+custLineId+'&diff='+diff+'&mtype='+modType;
+  return {
+    type:'flex',altText:'【訂單修改申請】'+custName+' #'+orderId+' '+lbl,
+    contents:{
+      type:'bubble',
+      header:{type:'box',layout:'vertical',paddingAll:'12px',backgroundColor:hColor,
+        contents:[{type:'text',text:'📋 訂單修改（'+lbl+'）',weight:'bold',size:'md',color:'#ffffff',wrap:true}]},
+      body:{type:'box',layout:'vertical',spacing:'sm',contents:[
+        fRow('👤 顧客',custName),fRow('📦 訂單','#'+orderId),
+        fRow('原金額','NT$ '+oldTotal),fRow('新金額','NT$ '+newTotal),
+        fRow('已付金額','NT$ '+paidAmt),
+        {type:'separator',margin:'md'},
+        {type:'text',text:diffLabel,weight:'bold',size:'md',color:hColor,margin:'md'},
+        {type:'text',
+          text:modType==='add'?'顧客加訂，請確認後通知補繳差額。'
+              :(modType==='cancel'?'顧客取消全單，請確認後安排退款。':'顧客少訂，請確認後安排退款差額。'),
+          wrap:true,size:'sm',color:'#888888',margin:'sm'}
+      ]},
+      footer:{type:'box',layout:'horizontal',spacing:'sm',contents:[
+        {type:'button',style:'primary',color:hColor,
+          action:{type:'postback',label:'✅ 同意',data:pbOk}},
+        {type:'button',style:'secondary',
+          action:{type:'postback',label:'❌ 拒絕',data:'act=mod_reject&oid='+orderId+'&cuid='+custLineId}}
+      ]}
+    }
+  };
+}
+
+// 【修改1】退款待處理訂單加購通知員工的 Flex Message
+function notifyStaffRefundAdd(orderId,custName,custLineId,oldTotal,newTotal,paidAmt,diff,oldRefund) {
+  var flexMsg=buildRefundAddFlexMsg(orderId,custName,custLineId,oldTotal,newTotal,paidAmt,diff,oldRefund);
+  STAFF_LINE_IDS.forEach(function(staffId) {
+    var ok = pushFlex(staffId, flexMsg);
+    if (!ok) {
+      try {
+        pushMsg(staffId,
+          '⚠️ [Flex失敗，文字通知]\n' +
+          '📋 退款訂單加購審核\n' +
+          '顧客：'+custName+'\n' +
+          '訂單：#'+orderId+'\n' +
+          '原金額：NT$ '+oldTotal+'\n' +
+          '新金額：NT$ '+newTotal+'\n' +
+          '已付：NT$ '+paidAmt+'\n' +
+          '需補繳：NT$ '+diff+'\n' +
+          '請至POS確認後手動更新狀態'
+        );
+      } catch(e2){ Logger.log('notifyStaffRefundAdd fallback失敗:'+e2); }
+    }
+  });
+}
+
+function buildRefundAddFlexMsg(orderId,custName,custLineId,oldTotal,newTotal,paidAmt,diff,oldRefund) {
+  return {
+    type:'flex',altText:'【退款訂單加購申請】'+custName+' #'+orderId,
+    contents:{
+      type:'bubble',
+      header:{type:'box',layout:'vertical',paddingAll:'12px',backgroundColor:'#7b1fa2',
+        contents:[{type:'text',text:'📋 退款訂單加購審核',weight:'bold',size:'md',color:'#ffffff',wrap:true}]},
+      body:{type:'box',layout:'vertical',spacing:'sm',contents:[
+        fRow('👤 顧客',custName),
+        fRow('📦 訂單','#'+orderId),
+        fRow('原金額','NT$ '+oldTotal),
+        fRow('新金額','NT$ '+newTotal),
+        fRow('已付金額','NT$ '+paidAmt),
+        fRow('🔻 原退款','NT$ '+oldRefund),
+        {type:'separator',margin:'md'},
+        {type:'text',text:'同意後：退款取消，顧客需補繳 NT$ '+diff,
+          weight:'bold',size:'sm',color:'#7b1fa2',margin:'md',wrap:true},
+        {type:'text',text:'顧客加購申請，請確認後同意或拒絕。',
+          wrap:true,size:'sm',color:'#888888',margin:'sm'}
+      ]},
+      footer:{type:'box',layout:'horizontal',spacing:'sm',contents:[
+        {type:'button',style:'primary',color:'#7b1fa2',
+          action:{type:'postback',label:'✅ 同意加購',
+            data:'act=mod_refund_add_ok&oid='+orderId+'&cuid='+custLineId+'&diff='+diff}},
+        {type:'button',style:'secondary',
+          action:{type:'postback',label:'❌ 拒絕',
+            data:'act=mod_refund_add_reject&oid='+orderId+'&cuid='+custLineId+'&oldTotal='+oldTotal}}
+      ]}
+    }
+  };
+}
+
+function fRow(label,value) {
+  return {type:'box',layout:'horizontal',margin:'sm',contents:[
+    {type:'text',text:label,size:'sm',color:'#888888',flex:3},
+    {type:'text',text:String(value),size:'sm',color:'#333333',flex:5,wrap:true,weight:'bold'}
+  ]};
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 查詢訂單
+// ════════════════════════════════════════════════════════════════════
+function queryAndReply(userId,token) {
+  var sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  var data=sheet.getDataRange().getValues(), header=data[0], found=[];
+  for (var i=2;i<data.length;i++) {
+    if (String(data[i][COL.LINE_ID])===userId&&data[i][COL.STATUS]!=='已取消') found.push(data[i]);
+  }
+  if (!found.length) {
+    replyWithQuickReply(token,
+      '查無您的訂單紀錄。\n如需預購年菜請點選下方選單。',
+      [{label:'🍱 立即預購年菜',type:'uri',uri:'https://liff.line.me/2009843210-1DLZ73WP'}]);
+    return;
+  }
+  var text='🔍 【您的年菜訂單】共'+found.length+'筆\n', hasModifiable=false;
+  found.forEach(function(row,idx){
+    var st=(row[COL.STATUS]||'未付').toString().trim();
+    var tot=Number(row[COL.TOTAL])||0, dep=Number(row[COL.DEPOSIT])||0;
+    var ep=row[COL.PAID], eu=row[COL.UNPAID], pd, upd;
+    if(ep!==''&&ep!==undefined){pd=Number(ep);upd=eu!==''?Number(eu):tot-pd;}
+    else if(st==='付清'){pd=tot;upd=0;}
+    else if(st==='付訂金'){pd=dep;upd=tot-dep;}
+    else{pd=0;upd=tot;}
+    var stMap={'付清':'✅','付訂金':'🟡','未付':'🔴','已取消':'❌','退款待處理':'🔄'};
+    text+='\n'+(idx+1)+'. 📦 訂單：'+row[COL.ORDER_ID];
+    text+='\n   📅 取貨：'+fmtDate(row[COL.DATE],'yyyy/MM/dd');
+    text+='\n   🏪 門市：'+(row[COL.BRANCH]||'—');
+    text+='\n   📌 狀態：'+(stMap[st]||'')+st;
+    var items=[];
+    for(var k=COL.ITEM_START;k<=COL.ITEM_END;k++){
+      if(row[k]>0){var nm=header[k]?header[k].toString().replace(/\n/g,''):'餐點';items.push('   · '+nm+' × '+row[k]);}
+    }
+    if(items.length) text+='\n'+items.join('\n');
+    text+='\n   💰 總額：NT$ '+tot;
+    if(pd>0) text+='\n   ✅ 已付：NT$ '+pd;
+    if(st==='退款待處理'){
+      var refAmt=Math.max(0,pd-tot)||Math.abs(Number(row[COL.UNPAID])||0);
+      if(refAmt>0) text+='\n   🔻 待退款：NT$ '+refAmt+'（門市處理中，請耐心等候）';
+    } else if(upd>0) {
+      text+='\n   ❗ 未付：NT$ '+upd;
+    }
+    if(st!=='已取消'&&st!=='退款待處理') hasModifiable=true;
+    text+='\n   ────────';
+  });
+  text+='\n\n💡 匯款後請回覆後五碼，例如：12345';
+  var qrItems=[];
+  if(hasModifiable) qrItems.push({label:'✏️ 修改訂單',type:'uri',uri:'https://liff.line.me/2009843210-1DLZ73WP'});
+  qrItems.push({label:'🍱 新增訂購',type:'uri',uri:'https://liff.line.me/2009843210-1DLZ73WP'});
+  qrItems.push({label:'📋 再查一次',type:'message',text:'查詢訂單'});
+  replyWithQuickReply(token,text,qrItems);
+}
+
+function replyWithQuickReply(token,text,items) {
+  var qrItems=items.map(function(it){
+    return it.type==='uri'
+      ?{type:'action',action:{type:'uri',label:it.label,uri:it.uri}}
+      :{type:'action',action:{type:'message',label:it.label,text:it.text}};
+  });
+  UrlFetchApp.fetch('https://api.line.me/v2/bot/message/reply',{
+    method:'post',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+LINE_CHANNEL_ACCESS_TOKEN},
+    payload:JSON.stringify({replyToken:token,messages:[{type:'text',text:text,quickReply:{items:qrItems}}]})
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 處理 LIFF / POS 訂單（含付款後修改差額邏輯）
+// ════════════════════════════════════════════════════════════════════
+function handleOrder(pd) {
+  var sheet  = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  var orderId= pd.orderId||genId(sheet);
+  var arr    = pd.items_qty_array; // 長度 22（menuItems 0-21）
+  var src    = pd.source||'LINE';
+
+  // 【修改6】重新對應菜品到 Sheet 欄位
+  //   arr[0..15]  → cols H-W  (ITEM_START+0 ~ ITEM_START+15)
+  //   arr[21]     → col X     (ITEM_START+16，松露蘿蔔糕)
+  //   arr[16..20] → cols Y-AC (ITEM_START+17 ~ ITEM_START+21)
+  //   arr[22]未使用；最後 push totalAmount 至 ITEM_START+22 = TOTAL 欄
+  var its = arr.slice(0,16).concat([arr[21]||0]).concat(arr.slice(16,21));
+  its.push(pd.totalAmount);
+
+  var ps  = pd.payStatus||'未付';
+  var dep = pd.depositAmount||0;
+
+  // 【修改5】辣度備註：若有點清蒸臭豆腐，記錄到 GIFT 欄（不覆蓋已有贈品）
+  var spiceNote = String(pd.spiceNote||'');
+
+  if (pd.action==='update') {
+    var data=sheet.getDataRange().getValues(), tRow=-1;
+    for(var i=0;i<data.length;i++){
+      if(String(data[i][COL.ORDER_ID])===String(orderId)){tRow=i+1;break;}
+    }
+    if (tRow!==-1) {
+      var oldTotal  = Number(data[tRow-1][COL.TOTAL]) ||0;
+      var paidAmt   = Number(data[tRow-1][COL.PAID])  ||0;
+      var oldSt     = String(data[tRow-1][COL.STATUS]||'未付');
+      var newTotal  = Number(pd.totalAmount)||0;
+      var custLID   = String(data[tRow-1][COL.LINE_ID]);
+      var wasPaid   = (oldSt==='付清'||oldSt==='付訂金');
+
+      // 更新基本資料
+      sheet.getRange(tRow,COL.NAME  +1).setValue(pd.name);
+      // 【修改3】電話強制設為文字格式，保留開頭 0
+      sheet.getRange(tRow,COL.PHONE +1).setNumberFormat('@').setValue(String(pd.phone));
+      sheet.getRange(tRow,COL.DATE  +1).setValue(pd.date);
+      sheet.getRange(tRow,COL.BRANCH+1).setValue(pd.branch||'');
+      sheet.getRange(tRow,COL.TIME  +1).setValue(pd.time||'');
+      sheet.getRange(tRow,COL.ITEM_START+1,1,23).setValues([its]);
+      sheet.getRange(tRow,COL.REMIND_TS+1).setValue(dlTs());
+
+      // 更新辣度備註（不蓋掉已有的贈品內容）
+      var stinkTofuQty = Number(arr[6]) || 0; // arr[6]=清蒸臭豆腐
+      if (spiceNote && stinkTofuQty > 0) {
+        var existGift = String(data[tRow-1][COL.GIFT]||'');
+        var baseGift  = existGift.replace(/清蒸臭豆腐：[^\n,，]*/g,'').trim();
+        sheet.getRange(tRow,COL.GIFT+1).setValue((baseGift?baseGift+'\n':'')+spiceNote);
+      } else if (stinkTofuQty === 0) {
+        // 清蒸臭豆腐歸0 → 清空辣度備註，保留其他贈品文字
+        var existGift = String(data[tRow-1][COL.GIFT]||'');
+        var cleanedGift = existGift.replace(/清蒸臭豆腐：[^\n,，]*\n?/g,'').trim();
+        sheet.getRange(tRow,COL.GIFT+1).setValue(cleanedGift);
+      }
+
+      // ── 退款待處理 + 加購且新金額 > 已付 → 需員工審核 ──
+      // BugFix: 原本條件含 pd.fromRefundStatus===true，但 LIFF 前端從未傳此欄位
+      // 改為：排除 POS 現場收款(posEditMode)，且 D 欄不是門市帳號
+      if (oldSt==='退款待處理' && newTotal>paidAmt && !pd.posEditMode && custLID !== 'POS_STORE') {
+        var diff2   = newTotal-paidAmt;
+        var oldRef  = Math.abs(Number(data[tRow-1][COL.UNPAID])||0);
+        // 先把新的菜品/金額寫入 Sheet，但狀態維持退款待處理（等員工同意才改）
+        sheet.getRange(tRow,COL.TOTAL+1).setValue(newTotal);
+        // 通知員工
+        notifyStaffRefundAdd(orderId,pd.name,custLID,oldTotal,newTotal,paidAmt,diff2,oldRef);
+        // 通知顧客等候
+        if (!pd.userId.startsWith('POS')&&custLID.startsWith('U')) {
+          pushMsg(custLID,
+            '📋 您的加購申請已送出。\n\n訂單 #'+orderId+
+            '\n新金額：NT$ '+newTotal+'\n需補繳：NT$ '+diff2+
+            '\n\n員工確認後將立即通知您，請稍候。');
+        }
+        return toJson({status:'pending',message:'退款加購申請已送出，等待員工確認'});
+      }
+
+      // ── POS 員工現場收款 ──
+      if (pd.posEditMode===true) {
+        var oldPaid2  = Number(data[tRow-1][COL.PAID])||0;
+        var newPaid2  = oldPaid2+(Number(pd.posCollectedAmt)||0);
+        var diffUnpaid= newTotal-newPaid2;
+        sheet.getRange(tRow,COL.TOTAL +1).setValue(newTotal);
+        sheet.getRange(tRow,COL.PAID  +1).setValue(newPaid2);
+        sheet.getRange(tRow,COL.UNPAID+1).setValue(Math.max(0,diffUnpaid));
+        var newSt2=diffUnpaid<=0?'付清':(newPaid2>0?'付訂金':'未付');
+        sheet.getRange(tRow,COL.STATUS +1).setValue(newSt2);
+        sheet.getRange(tRow,COL.CONFIRM+1).setValue(true);
+        // ★ SMS：POS 現場修改並收款通知（含菜色清單）
+        try {
+          var custPhone2 = String(data[tRow-1][COL.PHONE]);
+          var smsM2 = buildModifiedOrderSms(pd.name, orderId, newTotal, 'pos_update',
+            Number(pd.posCollectedAmt)||0, pd.items_qty_array, spiceNote);
+          sendTwilio(custPhone2, smsM2);
+        } catch(se2){ Logger.log('POS修改SMS失敗:'+se2); }
+
+      } else if (wasPaid && newTotal!==oldTotal) {
+        // ── LINE 加減訂 或 POS 少訂（【修改2】退款功能維持）──
+        var diff3   = Math.abs(newTotal-oldTotal);
+        var modType = newTotal>oldTotal?'add':(newTotal===0?'cancel':'reduce');
+        sheet.getRange(tRow,COL.TOTAL+1).setValue(newTotal);
+        if (modType==='add') {
+          sheet.getRange(tRow,COL.STATUS +1).setValue('付訂金');
+          sheet.getRange(tRow,COL.UNPAID +1).setValue(diff3);
+          sheet.getRange(tRow,COL.CONFIRM+1).setValue(false);
+        } else {
+          // 【修改2】少訂/取消 → 退款待處理（維持原有邏輯不刪除）
+          var refund3=paidAmt-newTotal;
+          sheet.getRange(tRow,COL.UNPAID+1).setValue(-Math.max(0,refund3));
+          sheet.getRange(tRow,COL.STATUS+1).setValue('退款待處理');
+        }
+        if (!pd.userId.startsWith('POS')) {
+          var modLbl={add:'加訂',reduce:'少訂',cancel:'取消'}[modType];
+          pushMsg(pd.userId,
+            '📋 您的訂單修改申請已送出。\n\n訂單 #'+orderId+'\n類型：'+modLbl+
+            '\n原金額：NT$ '+oldTotal+'\n新金額：NT$ '+newTotal+'\n'+
+            (modType==='add'?'需追加：NT$ '+diff3:'應退款：NT$ '+Math.max(0,paidAmt-newTotal))+
+            '\n\n員工確認後將立即通知您，請稍候。');
+        }
+        notifyStaffOrderModified(orderId,pd.name,custLID,oldTotal,newTotal,modType,paidAmt);
+        // ★ SMS：POS 員工幫客人加/減購時通知顧客（含菜色清單）
+        if (src === 'POS') {
+          try {
+            var custPhone3 = String(data[tRow-1][COL.PHONE]);
+            var smsM3 = buildModifiedOrderSms(pd.name, orderId, newTotal, modType,
+              diff3, pd.items_qty_array, spiceNote);
+            sendTwilio(custPhone3, smsM3);
+          } catch(se3){ Logger.log('POS加減購SMS失敗:'+se3); }
+        }
+      } else {
+        // 未付款修改，正常重置
+        sheet.getRange(tRow,COL.STATUS+1).setValue('未付');
+        sheet.getRange(tRow,COL.TOTAL +1).setValue(newTotal);
+        sheet.getRange(tRow,COL.DUE+1,1,4).setValues([['','','','']]);
+        sheet.getRange(tRow,COL.CONFIRM+1).setValue(false);
+        sheet.getRange(tRow,COL.DEPOSIT+1).setValue(0);
+        if (!pd.userId.startsWith('POS')) pushMsg(pd.userId,cfmMsg(pd.name,orderId,pd.totalAmount,'修改',dlTs()));
+      }
+    } else {
+      newRow(sheet,orderId,pd,its,ps,dep,src,spiceNote);
+      if (!pd.userId.startsWith('POS')) pushMsg(pd.userId,cfmMsg(pd.name,orderId,pd.totalAmount,'預購'));
+    }
+  } else {
+    newRow(sheet,orderId,pd,its,ps,dep,src,spiceNote);
+    var isPos=src==='POS'||(pd.userId&&pd.userId.startsWith('POS'));
+    if (!isPos) { try{pushMsg(pd.userId,cfmMsg(pd.name,orderId,pd.totalAmount,'預購',dlTs()));}catch(e){Logger.log(e);} }
+  }
+  return toJson({status:'success',orderId:orderId});
+}
+
+function newRow(sheet,orderId,pd,its,ps,dep,src,spiceNote) {
+  var ts=dlTs();
+  var row=['',orderId,pd.name,pd.userId,pd.phone,pd.date,ps];
+  row=row.concat(its);
+  row=row.concat(['',
+    dep>0?dep:(ps==='付清'?pd.totalAmount:''),
+    ps==='付清'?0:(dep>0?pd.totalAmount-dep:''),
+    '',false,pd.branch||'',pd.time||'',src,dep,ts,
+    spiceNote||'',  // AO 欄：辣度備註（若有贈品請手動在 Sheet 補填）
+    ''
+  ]);
+  sheet.appendRow(row);
+  // 確保電話欄設為文字格式，保留開頭 0
+  var lastRow=sheet.getLastRow();
+  sheet.getRange(lastRow,COL.PHONE+1).setNumberFormat('@').setValue(String(pd.phone));
+  // ★ SMS：每筆新訂單成立後寄簡訊給顧客（含菜色清單）
+  try {
+    var smsNew = buildOrderSms(
+      pd.name, orderId, pd.totalAmount, pd.date, pd.time||'',
+      pd.items_qty_array,  // 菜色數量陣列
+      spiceNote,           // 辣度備註
+      ps,                  // 付款狀態
+      dep                  // 已付訂金
+    );
+    var smsOk = sendTwilio(String(pd.phone), smsNew);
+    if (!smsOk) {
+      // SMS失敗： LINE通知員工
+      STAFF_LINE_IDS.forEach(function(s) {
+        try { pushMsg(s, '⚠ SMS發送失敗\n訂單#'+orderId+'\n顧客:'+pd.name+'\n電話:'+pd.phone+'\n請檢查 Twilio，試用帳號需驗證號碼'); } catch(le){}
+      });
+    }
+  } catch(se) {
+    Logger.log('新訂單SMS失敗:' + se);
+    STAFF_LINE_IDS.forEach(function(s) {
+      try { pushMsg(s, 'SMS錯誤\n訂單#'+orderId+'\n'+String(se).substring(0,80)); } catch(le){}
+    });
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 工具
+// ════════════════════════════════════════════════════════════════════
+function genId(sheet){
+  var last=sheet.getLastRow(); if(last<3)return'1';
+  var vals=sheet.getRange(3,COL.ORDER_ID+1,last-2,1).getValues(),max=0;
+  vals.forEach(function(r){var n=parseInt(String(r[0]).replace(/\D/g,''),10);if(!isNaN(n)&&n>max)max=n;});
+  return String(max+1);
+}
+
+function dlTs(){
+  var d=new Date(); d.setDate(d.getDate()+5);
+  return Utilities.formatDate(d,'Asia/Taipei','yyyy/MM/dd');
+}
+
+function getTsMs(ts){
+  if (!ts) return 0;
+  if (ts instanceof Date) return ts.getTime();
+  if (typeof ts==='number'&&ts>0) return ts;
+  if (typeof ts==='string'&&/^\d{4}\/\d{2}\/\d{2}$/.test(ts))
+    return new Date(ts.replace(/\//g,'-')+'T23:59:59+08:00').getTime();
+  return 0;
+}
+
+function fmtDeadline(ts){
+  var ms=getTsMs(ts);
+  if (!ms) return '（請盡速完成）';
+  return Utilities.formatDate(new Date(ms),'Asia/Taipei','yyyy/MM/dd 23:59');
+}
+
+function fmtDate(v,f){return v instanceof Date?Utilities.formatDate(v,'Asia/Taipei',f):String(v);}
+
+function cfmMsg(name,id,tot,act,deadlineTs){
+  var dlStr=deadlineTs?fmtDeadline(deadlineTs):'下單後 5 天內';
+  return name+' 您好！\n已成功收到您的年菜'+act+'訂單。\n\n'+
+    '📦 訂單編號：'+id+'\n💰 應付金額：NT$ '+tot+'\n\n'+
+    '💳 【匯款資訊】\n銀行：您的銀行 (代碼)\n帳號：1234-567-890123\n\n'+
+    '⏰ 付款截止：'+dlStr+'\n'+
+    '匯款後請直接回覆「帳號後五碼」\n例如：12345';
+}
+
+function parseQS(qs){
+  var o={};
+  qs.split('&').forEach(function(p){var kv=p.split('=');if(kv.length===2)o[kv[0]]=decodeURIComponent(kv[1]);});
+  return o;
+}
+function replyMsg(token,text){
+  UrlFetchApp.fetch('https://api.line.me/v2/bot/message/reply',{
+    method:'post',headers:{'Content-Type':'application/json','Authorization':'Bearer '+LINE_CHANNEL_ACCESS_TOKEN},
+    payload:JSON.stringify({replyToken:token,messages:[{type:'text',text:text}]})
+  });
+}
+function pushMsg(uid, text) {
+  var resp = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'post',
+    headers: {'Content-Type':'application/json','Authorization':'Bearer '+LINE_CHANNEL_ACCESS_TOKEN},
+    payload: JSON.stringify({to: uid, messages: [{type:'text', text: String(text)}]}),
+    muteHttpExceptions: true
+  });
+  var code = resp.getResponseCode();
+  if (code !== 200) {
+    var errBody = resp.getContentText();
+    Logger.log('pushMsg FAIL ['+uid+'] HTTP '+code+' → '+errBody);
+    return 'HTTP '+code+': '+errBody;   // 回傳錯誤字串
+  }
+  return '';  // 空字串 = 成功
+}
+function pushFlex(uid, flexMsg) {
+  // muteHttpExceptions:true → 不丟例外，改用 getResponseCode() 判斷
+  var resp = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'post',
+    headers: {'Content-Type':'application/json','Authorization':'Bearer '+LINE_CHANNEL_ACCESS_TOKEN},
+    payload: JSON.stringify({to:uid, messages:[flexMsg]}),
+    muteHttpExceptions: true
+  });
+  var code = resp.getResponseCode();
+  if (code !== 200) {
+    Logger.log('pushFlex FAIL ['+uid+'] HTTP '+code+' → '+resp.getContentText());
+    return false;
+  }
+  return true;
+}
+function toJson(o){return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);}
+function sortOrdersByIdAscending(){
+  var sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  var s=3,l=sheet.getLastRow();if(l<s)return;
+  var rng=sheet.getRange(s,1,l-s+1,sheet.getLastColumn()),d=rng.getValues();
+  d.sort(function(a,b){return(parseInt(String(a[COL.ORDER_ID]).replace(/\D/g,''),10)||0)-(parseInt(String(b[COL.ORDER_ID]).replace(/\D/g,''),10)||0);});
+  rng.setValues(d);SpreadsheetApp.getUi().alert('排序完成！');
+}
+
+// ╔══════════════════════════════════════════════════════════════════╗
