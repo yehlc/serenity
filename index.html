@@ -82,7 +82,35 @@
         .search-status{font-size:.85em;color:#666;margin:6px 0 8px;min-height:1.2em;}
         .edit-info-box{background:#e3f2fd;border-left:4px solid #1565c0;padding:10px 14px;border-radius:6px;margin-bottom:15px;font-size:.88em;line-height:1.6;}
         #loading{text-align:center;padding:30px;color:#666;font-weight:bold;}
-    </style>
+    
+/* 【修7】POS 菜單字體調大 */
+#posModal .item-name,
+#posModal .menu-item-name,
+#posModal .name,
+#menuList.pos-mode .item .name,
+.pos-mode .item .name {
+    font-size: 1.15em !important;
+    line-height: 1.45;
+}
+#posModal .price,
+.pos-mode .item .price {
+    font-size: 1.05em !important;
+}
+#posModal .qty-controls button,
+.pos-mode .qty-controls button {
+    font-size: 1.2em !important;
+    width: 36px !important;
+    height: 36px !important;
+}
+/* POS modal 主體字體 */
+#posModal .form-group label {
+    font-size: 1.05em;
+}
+#posModal .form-group input,
+#posModal .form-group select {
+    font-size: 1.1em;
+}
+</style>
 </head>
 <body>
 
@@ -142,6 +170,7 @@
             <!-- 【修改4】onchange 動態產生時間選單 -->
             <select id="editPickupDate" required onchange="syncTimeOptions('editPickupDate','editPickupTime')">
                 <option value="">請選擇取貨日期</option>
+                <option value="2027-02-03">2027 年 02 月 03 日（除夕前一天）</option>
                 <option value="2027-02-04">2027 年 02 月 04 日（除夕）</option>
                 <option value="2027-02-05">2027 年 02 月 05 日（初一）</option>
             </select>
@@ -159,7 +188,7 @@
         </div>
         <div class="form-group">
             <label>連絡電話</label>
-            <input type="tel" id="editCustPhone" placeholder="例如: 0912345678" required>
+            <input type="tel" id="editCustPhone" placeholder="例如: 0912345678" required inputmode="numeric" pattern="[0-9]*">
         </div>
 
         <div class="payment-section" id="editPaymentSection" style="display:none;">
@@ -199,6 +228,7 @@
             <label>取貨日期</label>
             <select id="pickupDate" required onchange="syncTimeOptions('pickupDate','pickupTime')">
                 <option value="">請選擇取貨日期</option>
+                <option value="2027-02-03">2027 年 02 月 03 日（除夕前一天）</option>
                 <option value="2027-02-04">2027 年 02 月 04 日（除夕）</option>
                 <option value="2027-02-05">2027 年 02 月 05 日（初一）</option>
             </select>
@@ -215,20 +245,21 @@
         </div>
         <div class="form-group">
             <label>連絡電話</label>
-            <input type="tel" id="custPhone" placeholder="例如: 0912345678" required>
+            <input type="tel" id="custPhone" placeholder="例如: 0912345678" required inputmode="numeric" pattern="[0-9]*">
         </div>
         <!-- 【修 3】LIFF 付款方式選擇區塊 -->
         <div class="payment-section" id="liffPaySection">
             <h4>💰 付款方式</h4>
-            <div class="pay-row">
-                <button type="button" id="liffPay0" onclick="selLiffPay('transfer')">轉帳匯款</button>
-                <button type="button" id="liffPay1" onclick="selLiffPay('onsite_full')">現場付款</button>
-                <button type="button" id="liffPay2" onclick="selLiffPay('onsite_deposit')">現場付訂金</button>
+            <div class="pay-row" style="flex-wrap:wrap;gap:6px;">
+                <button type="button" id="liffPay0" onclick="selLiffPay('transfer')" style="flex:1 1 45%;">💳 轉帳匯款</button>
+                <button type="button" id="liffPay1" onclick="selLiffPay('transfer_deposit')" style="flex:1 1 45%;">💳 轉帳付訂金</button>
+                <button type="button" id="liffPay2" onclick="selLiffPay('onsite_full')" style="flex:1 1 45%;">🏪 現場付款</button>
+                <button type="button" id="liffPay3" onclick="selLiffPay('onsite_deposit')" style="flex:1 1 45%;">🏪 現場付訂金</button>
             </div>
             <div class="dep-wrap" id="liffDepWrap">
                 <div class="form-group" style="margin-bottom:0;">
                     <label>訂金金額 (NT$)</label>
-                    <input type="number" id="liffDepositAmt" placeholder="請輸入欲付訂金金額" min="1">
+                    <input type="number" id="liffDepositAmt" placeholder="請輸入欲付訂金金額" min="1" inputmode="numeric">
                 </div>
             </div>
             <div id="liffPayHint" style="margin-top:8px;font-size:0.85em;color:#666;line-height:1.5;"></div>
@@ -252,6 +283,7 @@
             <label>取貨日期</label>
             <select id="posPickupDate" required onchange="syncTimeOptions('posPickupDate','posPickupTime')">
                 <option value="">請選擇取貨日期</option>
+                <option value="2027-02-03">2027 年 02 月 03 日（除夕前一天）</option>
                 <option value="2027-02-04">2027 年 02 月 04 日（除夕）</option>
                 <option value="2027-02-05">2027 年 02 月 05 日（初一）</option>
             </select>
@@ -268,7 +300,7 @@
         </div>
         <div class="form-group">
             <label>連絡電話</label>
-            <input type="tel" id="posCustPhone" placeholder="例如: 0912345678" required>
+            <input type="tel" id="posCustPhone" placeholder="例如: 0912345678" required inputmode="numeric" pattern="[0-9]*">
         </div>
         <div class="payment-section">
             <h4>💰 現場付款方式</h4>
@@ -371,9 +403,11 @@ const menuItems = [
 ];
 
 /* 【修改4】各日期對應可選取貨時間
+   2027-02-03（除夕前一天）：12:00 / 13:00 / 14:00 / 15:30
    2027-02-04（除夕）：僅 12:00
    2027-02-05（初一）：12:00 / 13:00 / 14:00 / 15:30          */
 const PICKUP_TIME_MAP = {
+    '2027-02-03': ['12:00','13:00','14:00','15:30'],
     '2027-02-04': ['12:00'],
     '2027-02-05': ['12:00','13:00','14:00','15:30']
 };
@@ -575,16 +609,22 @@ function calcTotal() {
 // ══════════════════════════════════════════════════════════
 function selLiffPay(mode) {
     liffPayMode = mode;
-    const modes = ['transfer','onsite_full','onsite_deposit'];
+    // 【修8】4 種付款模式
+    const modes = ['transfer','transfer_deposit','onsite_full','onsite_deposit'];
     modes.forEach((m,i) => {
-        document.getElementById('liffPay'+i).classList.toggle('sel', m===mode);
+        const btn = document.getElementById('liffPay'+i);
+        if (btn) btn.classList.toggle('sel', m===mode);
     });
-    document.getElementById('liffDepWrap').classList.toggle('show', mode==='onsite_deposit');
+    // 訂金欄位:轉帳付訂金 與 現場付訂金 都要顯示
+    const needsDeposit = (mode === 'transfer_deposit' || mode === 'onsite_deposit');
+    document.getElementById('liffDepWrap').classList.toggle('show', needsDeposit);
     const hintEl = document.getElementById('liffPayHint');
     if (mode === 'transfer') {
-        hintEl.innerHTML = '✓ 將以匯款方式付款,送出後系統會提供匯款資訊,匯款後請回覆後5碼。';
+        hintEl.innerHTML = '✓ 送出後系統會提供匯款資訊,匯款後請回覆後5碼,員工確認收款即完成。';
+    } else if (mode === 'transfer_deposit') {
+        hintEl.innerHTML = '✓ 送出後系統會提供匯款資訊,先匯訂金並回覆後5碼,員工確認後再於取貨時付清餘款。';
     } else if (mode === 'onsite_full') {
-        hintEl.innerHTML = '✓ 取貨當天現場付清全額。';
+        hintEl.innerHTML = '✓ 取貨當天到門市現場付清全額,無須事前匯款。';
     } else if (mode === 'onsite_deposit') {
         hintEl.innerHTML = '✓ 取貨前到門市付訂金,餘款取貨時付清。';
     } else {
@@ -915,7 +955,7 @@ function openCart() {
     } else {
         paySec.style.display = 'block';
         liffPayMode = '';
-        ['liffPay0','liffPay1','liffPay2'].forEach(id => {
+        ['liffPay0','liffPay1','liffPay2','liffPay3'].forEach(id => {
             const b = document.getElementById(id);
             if (b) b.classList.remove('sel');
         });
@@ -950,10 +990,10 @@ function submitOrder() {
         }
     }
     let liffDepAmt = 0;
-    if (liffPayMode === 'onsite_deposit') {
+    if (liffPayMode === 'onsite_deposit' || liffPayMode === 'transfer_deposit') {
         liffDepAmt = parseInt(document.getElementById('liffDepositAmt').value) || 0;
         if (liffDepAmt <= 0) { alert('請輸入訂金金額!'); return; }
-        if (liffDepAmt >= total) { alert('訂金不可大於等於總金額,要全付請選「現場付款」!'); return; }
+        if (liffDepAmt >= total) { alert('訂金不可大於等於總金額,要全付請選「轉帳匯款」或「現場付款」!'); return; }
     }
 
     const spiceNote = qty[6]>0 ? `清蒸臭豆腐：${stinkTofuSpice}` : '';
