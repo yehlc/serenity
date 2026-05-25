@@ -156,6 +156,18 @@
     margin-top: 6px;
     font-size: 0.88em;
 }
+/* 【需求3】菜色取貨日限定提示 */
+.date-constraint {
+    display: inline-block;
+    font-size: 0.78em;
+    color: #c62828;
+    background: #ffebee;
+    border: 1px solid #ef9a9a;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-top: 4px;
+    font-weight: bold;
+}
 </style>
 </head>
 <body>
@@ -179,7 +191,7 @@
 <div class="notice-banner" id="noticeBanner" style="display:none;">
     <div class="notice-title">📢 預購須知</div>
     <div class="notice-body">
-        <div>以下熟食年菜皆為 <b>5~6 人份</b></div>
+        <div>以上熟食年菜皆為 <b>5~6 人份</b></div>
         <div>即日起開放預訂,<b>數量有限,售完為止</b></div>
         <div class="notice-tags">
             <span class="vegan-tag lacto-ovo">奶蛋素</span> 含奶或蛋
@@ -423,7 +435,7 @@ const menuItems = [
     {name:"祥和拼盤",  price:800,  lactoOvo:true },  // 0
     {name:"佛跳牆",    price:1380                 }, // 1
     {name:"肉骨茶鍋",  price:1380                 }, // 2
-    {name:"酸白菜鍋",  price:860,  lactoOvo:true                  }, // 3
+    {name:"酸白菜鍋",  price:860                  }, // 3
     {name:"麻油鍋",    price:860,  lactoOvo:true }, // 4
     {name:"紅燒獅子頭",price:640,  lactoOvo:true }, // 5
     {name:"清蒸臭豆腐",price:640                  }, // 6 ← 有辣度選項
@@ -431,7 +443,7 @@ const menuItems = [
     {name:"三杯猴頭菇",price:760                  }, // 8
     {name:"宮保素雞丁",price:600,  lactoOvo:true }, // 9
     {name:"糖醋素肉",  price:600,  lactoOvo:true }, // 10
-    {name:"素杏鮑牛腩煲",price:720                }, // 11
+    {name:"素杏鮑牛腩煲",price:720, requiresDate:'2027-02-05'}, // 11  ← 限定除夕
     {name:"酸白菜素牛肉",price:560, lactoOvo:true}, // 12
     {name:"麻油素腰花",price:760                  }, // 13
     {name:"蓉城口水雞",price:760,  lactoOvo:true }, // 14
@@ -440,16 +452,16 @@ const menuItems = [
     {name:"椒麻油飯",  price:300,  lactoOvo:true }, // 17
     {name:"炒炊粉",    price:180                  }, // 18
     {name:"原味蘿蔔糕",price:200                  }, // 19
-    {name:"酥香蘿蔔糕",price:280,  lactoOvo:true                  }, // 20
+    {name:"酥香蘿蔔糕",price:280                  }, // 20
     {name:"松露蘿蔔糕",price:380                  }  // 21 ← 新菜色,對應 Sheet X 欄
 ];
 
 /* 【修改4】各日期對應可選取貨時間
-   2027-02-04（除夕前一天）：12:00 
-   2027-02-05（除夕）： 12:00 / 13:00 / 14:00 / 15:30                              */
+   2027-02-04（除夕前一天）：12:00 / 13:00 / 14:00 / 15:30
+   2027-02-05（除夕）：僅 12:00                              */
 const PICKUP_TIME_MAP = {
-    '2027-02-04': ['12:00'],  // 除夕前一天:僅中午
-    '2027-02-05': ['12:00','13:00','14:00','15:30']                            // 除夕:全天時段
+    '2027-02-04': ['12:00','13:00','14:00','15:30'],  // 除夕前一天:全天時段
+    '2027-02-05': ['12:00']                            // 除夕:僅中午
 };
 
 const STATUS_COLOR = {
@@ -503,7 +515,31 @@ function validateOrderForm(name, phone, date, time) {
         alert('連絡電話格式錯誤，請輸入正確的手機號碼 (例如: 0912345678)！');
         return false;
     }
+    // 【需求3】檢查菜色取貨日限定
+    const violation = checkDateConstraints(date);
+    if (violation) {
+        alert(violation);
+        return false;
+    }
     return true;
+}
+
+/**
+ * 【需求3】檢查所選菜色與取貨日是否衝突
+ * 例:素杏鮑牛腩煲(index 11) 限定 2027-02-05 取貨
+ * @returns 衝突訊息字串(若衝突);null 則 OK
+ */
+function checkDateConstraints(selectedDate) {
+    for (let i = 0; i < menuItems.length; i++) {
+        const item = menuItems[i];
+        if (qty[i] > 0 && item.requiresDate && item.requiresDate !== selectedDate) {
+            // 取得 requiresDate 對應的友善文字
+            const dateOpt = document.querySelector(`#pickupDate option[value="${item.requiresDate}"], #posPickupDate option[value="${item.requiresDate}"], #editPickupDate option[value="${item.requiresDate}"]`);
+            const dateLabel = dateOpt ? dateOpt.textContent.trim() : item.requiresDate;
+            return `「${item.name}」這道菜只能在「${dateLabel}」取貨,請調整取貨日期或移除該菜色!`;
+        }
+    }
+    return null;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -623,6 +659,14 @@ function renderMenu() {
             ? `<span class="vegan-tag lacto-ovo">奶蛋素</span>`
             : `<span class="vegan-tag pure-vegan">純素</span>`;
 
+        // 【需求3】取貨日限定提示(例:素杏鮑牛腩煲限 2/5 除夕)
+        let dateTag = '';
+        if (item.requiresDate) {
+            const dateOpt = document.querySelector(`#pickupDate option[value="${item.requiresDate}"], #posPickupDate option[value="${item.requiresDate}"]`);
+            const dateLabel = dateOpt ? dateOpt.textContent.trim() : item.requiresDate;
+            dateTag = `<div class="date-constraint">📅 此商品限「${dateLabel}」取貨</div>`;
+        }
+
         div.innerHTML = `
             <img src="https://via.placeholder.com/80?text=圖片" alt="${item.name}">
             <div class="menu-item-info">
@@ -631,6 +675,7 @@ function renderMenu() {
                     ${veganTag}
                 </div>
                 <div class="menu-item-price">NT$ ${item.price}</div>
+                ${dateTag}
                 ${spiceHtml}
             </div>${ctrl}`;
         c.appendChild(div);
@@ -638,6 +683,29 @@ function renderMenu() {
 }
 
 function upd(i, d) {
+    // 【需求3】先檢查是否能加入(若會違反限定日且使用者明確點 +,給提示但仍允許)
+    if (d > 0 && menuItems[i].requiresDate) {
+        const cur = (document.getElementById('pickupDate') || {}).value
+                 || (document.getElementById('posPickupDate') || {}).value;
+        if (cur && cur !== menuItems[i].requiresDate) {
+            // 先溫和提示,不強制阻止(讓使用者自己決定要不要切日)
+            const dateOpt = document.querySelector(`#pickupDate option[value="${menuItems[i].requiresDate}"], #posPickupDate option[value="${menuItems[i].requiresDate}"]`);
+            const dateLabel = dateOpt ? dateOpt.textContent.trim() : menuItems[i].requiresDate;
+            if (!confirm(`「${menuItems[i].name}」只能在「${dateLabel}」取貨。\n\n按「確定」自動切換取貨日,按「取消」維持原日期(送出時會提醒)`)) {
+                // 取消:仍然加入但日期不變,送出時 validateOrderForm 會擋
+            } else {
+                // 確定:自動切日期
+                ['pickupDate','posPickupDate','editPickupDate'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.value = menuItems[i].requiresDate;
+                        // 觸發 onchange 同步時間選單
+                        try { el.dispatchEvent(new Event('change')); } catch(e) {}
+                    }
+                });
+            }
+        }
+    }
     qty[i] = Math.max(0, qty[i] + d);
     document.getElementById('q' + i).value = qty[i];
     calcTotal();
