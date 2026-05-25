@@ -110,6 +110,52 @@
 #posModal .form-group select {
     font-size: 1.1em;
 }
+
+/* 【修1】奶蛋素 / 純素標籤 */
+.vegan-tag {
+    display: inline-block;
+    font-size: 0.7em;
+    padding: 2px 6px;
+    border-radius: 8px;
+    margin-left: 6px;
+    font-weight: bold;
+    vertical-align: middle;
+    line-height: 1.3;
+}
+.vegan-tag.lacto-ovo {
+    background: #fff3e0;
+    color: #e65100;
+    border: 1px solid #ffb74d;
+}
+.vegan-tag.pure-vegan {
+    background: #e8f5e9;
+    color: #2e7d32;
+    border: 1px solid #81c784;
+}
+/* 注意事項橫幅 */
+.notice-banner {
+    margin: 10px;
+    padding: 12px 14px;
+    background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+    border-left: 4px solid #ff9800;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+.notice-banner .notice-title {
+    font-weight: bold;
+    color: #e65100;
+    font-size: 1.05em;
+    margin-bottom: 6px;
+}
+.notice-banner .notice-body {
+    color: #5d4037;
+    font-size: 0.92em;
+    line-height: 1.6;
+}
+.notice-banner .notice-tags {
+    margin-top: 6px;
+    font-size: 0.88em;
+}
 </style>
 </head>
 <body>
@@ -128,6 +174,21 @@
 </div>
 
 <div id="loading">載入資料中...</div>
+
+<!-- 【修1】菜單注意事項橫幅 -->
+<div class="notice-banner" id="noticeBanner" style="display:none;">
+    <div class="notice-title">📢 預購須知</div>
+    <div class="notice-body">
+        <div>以上熟食年菜皆為 <b>5~6 人份</b></div>
+        <div>即日起開放預訂,<b>數量有限,售完為止</b></div>
+        <div class="notice-tags">
+            <span class="vegan-tag lacto-ovo">奶蛋素</span> 含奶或蛋
+            　
+            <span class="vegan-tag pure-vegan">純素</span> 全植物性
+        </div>
+    </div>
+</div>
+
 <div class="menu-container" id="menuList" style="display:none;"></div>
 
 <div class="cart-bar" id="cartBar" onclick="openCart()">
@@ -170,9 +231,8 @@
             <!-- 【修改4】onchange 動態產生時間選單 -->
             <select id="editPickupDate" required onchange="syncTimeOptions('editPickupDate','editPickupTime')">
                 <option value="">請選擇取貨日期</option>
-                <option value="2027-02-03">2027 年 02 月 03 日（除夕前一天）</option>
-                <option value="2027-02-04">2027 年 02 月 04 日（除夕）</option>
-                <option value="2027-02-05">2027 年 02 月 05 日（初一）</option>
+                <option value="2027-02-04">2027 年 02 月 04 日（除夕前一天）</option>
+                <option value="2027-02-05">2027 年 02 月 05 日（除夕）</option>
             </select>
         </div>
         <div class="form-group">
@@ -228,9 +288,8 @@
             <label>取貨日期</label>
             <select id="pickupDate" required onchange="syncTimeOptions('pickupDate','pickupTime')">
                 <option value="">請選擇取貨日期</option>
-                <option value="2027-02-03">2027 年 02 月 03 日（除夕前一天）</option>
-                <option value="2027-02-04">2027 年 02 月 04 日（除夕）</option>
-                <option value="2027-02-05">2027 年 02 月 05 日（初一）</option>
+                <option value="2027-02-04">2027 年 02 月 04 日（除夕前一天）</option>
+                <option value="2027-02-05">2027 年 02 月 05 日（除夕）</option>
             </select>
         </div>
         <div class="form-group">
@@ -246,23 +305,6 @@
         <div class="form-group">
             <label>連絡電話</label>
             <input type="tel" id="custPhone" placeholder="例如: 0912345678" required inputmode="numeric" pattern="[0-9]*">
-        </div>
-        <!-- 【修 3】LIFF 付款方式選擇區塊 -->
-        <div class="payment-section" id="liffPaySection">
-            <h4>💰 付款方式</h4>
-            <div class="pay-row" style="flex-wrap:wrap;gap:6px;">
-                <button type="button" id="liffPay0" onclick="selLiffPay('transfer')" style="flex:1 1 45%;">💳 轉帳匯款</button>
-                <button type="button" id="liffPay1" onclick="selLiffPay('transfer_deposit')" style="flex:1 1 45%;">💳 轉帳付訂金</button>
-                <button type="button" id="liffPay2" onclick="selLiffPay('onsite_full')" style="flex:1 1 45%;">🏪 現場付款</button>
-                <button type="button" id="liffPay3" onclick="selLiffPay('onsite_deposit')" style="flex:1 1 45%;">🏪 現場付訂金</button>
-            </div>
-            <div class="dep-wrap" id="liffDepWrap">
-                <div class="form-group" style="margin-bottom:0;">
-                    <label>訂金金額 (NT$)</label>
-                    <input type="number" id="liffDepositAmt" placeholder="請輸入欲付訂金金額" min="1" inputmode="numeric">
-                </div>
-            </div>
-            <div id="liffPayHint" style="margin-top:8px;font-size:0.85em;color:#666;line-height:1.5;"></div>
         </div>
         <button class="submit-btn" id="submitBtn" onclick="submitOrder()">確認送出訂單</button>
     </div>
@@ -283,9 +325,8 @@
             <label>取貨日期</label>
             <select id="posPickupDate" required onchange="syncTimeOptions('posPickupDate','posPickupTime')">
                 <option value="">請選擇取貨日期</option>
-                <option value="2027-02-03">2027 年 02 月 03 日（除夕前一天）</option>
-                <option value="2027-02-04">2027 年 02 月 04 日（除夕）</option>
-                <option value="2027-02-05">2027 年 02 月 05 日（初一）</option>
+                <option value="2027-02-04">2027 年 02 月 04 日（除夕前一天）</option>
+                <option value="2027-02-05">2027 年 02 月 05 日（除夕）</option>
             </select>
         </div>
         <div class="form-group">
@@ -378,38 +419,37 @@ function checkGasDeployment() {
      index 21    → X 欄（原空白，現改為「松露蘿蔔糕」）
    請記得在 Sheet 第1列把 X 欄標題改為「松露蘿蔔糕」         */
 const menuItems = [
-    {name:"祥和拼盤",  price:800},  // 0
-    {name:"佛跳牆",    price:1380}, // 1
-    {name:"肉骨茶鍋",  price:1380}, // 2
-    {name:"酸白菜鍋",  price:860},  // 3
-    {name:"麻油鍋",    price:860},  // 4
-    {name:"紅燒獅子頭",price:640},  // 5
-    {name:"清蒸臭豆腐",price:640},  // 6 ← 【修改5】有辣度選項
-    {name:"麻辣臭豆腐",price:600},  // 7
-    {name:"三杯猴頭菇",price:760},  // 8
-    {name:"宮保素雞丁",price:600},  // 9
-    {name:"糖醋素肉",  price:600},  // 10
-    {name:"素杏鮑牛腩煲",price:720},// 11
-    {name:"酸白菜素牛肉",price:560},// 12
-    {name:"麻油素腰花",price:760},  // 13
-    {name:"蓉城口水雞",price:760},  // 14
-    {name:"祥和素油雞",price:640},  // 15
-    {name:"松露油飯",  price:380},  // 16
-    {name:"椒麻油飯",  price:300},  // 17
-    {name:"炒炊粉",    price:180},  // 18
-    {name:"原味蘿蔔糕",price:200},  // 19
-    {name:"酥香蘿蔔糕",price:280},  // 20
-    {name:"松露蘿蔔糕",price:380}   // 21 ← 【修改6】新菜色，對應 Sheet X 欄
+    // 【修1】lactoOvo: true 表「奶蛋素」(其他預設純素)
+    {name:"祥和拼盤",  price:800,  lactoOvo:true },  // 0
+    {name:"佛跳牆",    price:1380                 }, // 1
+    {name:"肉骨茶鍋",  price:1380                 }, // 2
+    {name:"酸白菜鍋",  price:860                  }, // 3
+    {name:"麻油鍋",    price:860,  lactoOvo:true }, // 4
+    {name:"紅燒獅子頭",price:640,  lactoOvo:true }, // 5
+    {name:"清蒸臭豆腐",price:640                  }, // 6 ← 有辣度選項
+    {name:"麻辣臭豆腐",price:600                  }, // 7
+    {name:"三杯猴頭菇",price:760                  }, // 8
+    {name:"宮保素雞丁",price:600,  lactoOvo:true }, // 9
+    {name:"糖醋素肉",  price:600,  lactoOvo:true }, // 10
+    {name:"素杏鮑牛腩煲",price:720                }, // 11
+    {name:"酸白菜素牛肉",price:560, lactoOvo:true}, // 12
+    {name:"麻油素腰花",price:760                  }, // 13
+    {name:"蓉城口水雞",price:760,  lactoOvo:true }, // 14
+    {name:"祥和素油雞",price:640,  lactoOvo:true }, // 15
+    {name:"松露油飯",  price:380                  }, // 16
+    {name:"椒麻油飯",  price:300,  lactoOvo:true }, // 17
+    {name:"炒炊粉",    price:180                  }, // 18
+    {name:"原味蘿蔔糕",price:200                  }, // 19
+    {name:"酥香蘿蔔糕",price:280                  }, // 20
+    {name:"松露蘿蔔糕",price:380                  }  // 21 ← 新菜色,對應 Sheet X 欄
 ];
 
 /* 【修改4】各日期對應可選取貨時間
-   2027-02-03（除夕前一天）：12:00 / 13:00 / 14:00 / 15:30
-   2027-02-04（除夕）：僅 12:00
-   2027-02-05（初一）：12:00 / 13:00 / 14:00 / 15:30          */
+   2027-02-04（除夕前一天）：12:00 / 13:00 / 14:00 / 15:30
+   2027-02-05（除夕）：僅 12:00                              */
 const PICKUP_TIME_MAP = {
-    '2027-02-03': ['12:00','13:00','14:00','15:30'],
-    '2027-02-04': ['12:00'],
-    '2027-02-05': ['12:00','13:00','14:00','15:30']
+    '2027-02-04': ['12:00','13:00','14:00','15:30'],  // 除夕前一天:全天時段
+    '2027-02-05': ['12:00']                            // 除夕:僅中午
 };
 
 const STATUS_COLOR = {
@@ -419,7 +459,7 @@ const STATUS_COLOR = {
 
 let total = 0;
 let qty   = new Array(menuItems.length).fill(0); // 長度現為 22（含松露蘿蔔糕）
-let lastOrder = null, action = 'new', posPayMode = 'none', editPayMode = 'none', liffPayMode = '';
+let lastOrder = null, action = 'new', posPayMode = 'none', editPayMode = 'none';
 let isPosMode = false, isEditMode = false;
 let currentEditOrder = null;
 let allOrders = [];
@@ -545,6 +585,7 @@ function startEdit(isEdit) {
 function showMenu() {
     document.getElementById('loading').style.display = 'none';
     document.getElementById('menuList').style.display = 'block';
+    document.getElementById('noticeBanner').style.display = 'block';
     renderMenu();
     calcTotal();
     if (!isPosMode) document.getElementById('cartBar').classList.add('show');
@@ -577,10 +618,18 @@ function renderMenu() {
             <button class="qty-btn" onclick="upd(${i},1)">+</button>
         </div>`;
 
+        // 【修1】奶蛋素標籤
+        const veganTag = item.lactoOvo
+            ? `<span class="vegan-tag lacto-ovo">奶蛋素</span>`
+            : `<span class="vegan-tag pure-vegan">純素</span>`;
+
         div.innerHTML = `
             <img src="https://via.placeholder.com/80?text=圖片" alt="${item.name}">
             <div class="menu-item-info">
-                <div class="menu-item-title">${item.name}</div>
+                <div class="menu-item-title">
+                    ${item.name}
+                    ${veganTag}
+                </div>
                 <div class="menu-item-price">NT$ ${item.price}</div>
                 ${spiceHtml}
             </div>${ctrl}`;
@@ -601,34 +650,6 @@ function calcTotal() {
     const cartBar = document.getElementById('cartBar');
     if (isEditMode || !isPosMode) {
         cartBar.classList.toggle('disabled', total <= 0);
-    }
-}
-
-// ══════════════════════════════════════════════════════════
-//  LIFF 付款方式選擇(顧客 LINE 下單)
-// ══════════════════════════════════════════════════════════
-function selLiffPay(mode) {
-    liffPayMode = mode;
-    // 【修8】4 種付款模式
-    const modes = ['transfer','transfer_deposit','onsite_full','onsite_deposit'];
-    modes.forEach((m,i) => {
-        const btn = document.getElementById('liffPay'+i);
-        if (btn) btn.classList.toggle('sel', m===mode);
-    });
-    // 訂金欄位:轉帳付訂金 與 現場付訂金 都要顯示
-    const needsDeposit = (mode === 'transfer_deposit' || mode === 'onsite_deposit');
-    document.getElementById('liffDepWrap').classList.toggle('show', needsDeposit);
-    const hintEl = document.getElementById('liffPayHint');
-    if (mode === 'transfer') {
-        hintEl.innerHTML = '✓ 送出後系統會提供匯款資訊,匯款後請回覆後5碼,員工確認收款即完成。';
-    } else if (mode === 'transfer_deposit') {
-        hintEl.innerHTML = '✓ 送出後系統會提供匯款資訊,先匯訂金並回覆後5碼,員工確認後再於取貨時付清餘款。';
-    } else if (mode === 'onsite_full') {
-        hintEl.innerHTML = '✓ 取貨當天到門市現場付清全額,無須事前匯款。';
-    } else if (mode === 'onsite_deposit') {
-        hintEl.innerHTML = '✓ 取貨前到門市付訂金,餘款取貨時付清。';
-    } else {
-        hintEl.innerHTML = '';
     }
 }
 
@@ -946,24 +967,7 @@ function confirmHideOrder(orderId,name) {
 // ══════════════════════════════════════════════════════════
 function openCart() {
     if (total<=0) { alert('購物車是空的，請先選擇餐點唷！'); return; }
-    // 【修 3】編輯舊訂單時隱藏付款選項區(維持原付款狀態,由員工確認後再處理)
-    //         新訂單則重置付款方式選擇
-    const paySec = document.getElementById('liffPaySection');
-    if (action === 'update' && lastOrder && lastOrder.paymentStatus && lastOrder.paymentStatus !== '未付') {
-        paySec.style.display = 'none';
-        liffPayMode = 'keep'; // 特殊值:後端會跳過付款處理
-    } else {
-        paySec.style.display = 'block';
-        liffPayMode = '';
-        ['liffPay0','liffPay1','liffPay2','liffPay3'].forEach(id => {
-            const b = document.getElementById(id);
-            if (b) b.classList.remove('sel');
-        });
-        document.getElementById('liffDepWrap').classList.remove('show');
-        const li = document.getElementById('liffDepositAmt');
-        if (li) li.value = '';
-        document.getElementById('liffPayHint').innerHTML = '';
-    }
+    // 【修2】LIFF 統一走轉帳匯款流程,移除付款方式選項
     document.getElementById('orderModal').style.display='flex';
 }
 
@@ -982,19 +986,11 @@ function submitOrder() {
     const time  = document.getElementById('pickupTime').value;
     if (!validateOrderForm(name,phone,date,time)) return;
 
-    // 【修 3】LIFF 付款方式驗證(編輯已付款訂單時 keep,跳過)
-    if (liffPayMode !== 'keep') {
-        if (!liffPayMode) {
-            alert('請選擇付款方式!');
-            return;
-        }
-    }
-    let liffDepAmt = 0;
-    if (liffPayMode === 'onsite_deposit' || liffPayMode === 'transfer_deposit') {
-        liffDepAmt = parseInt(document.getElementById('liffDepositAmt').value) || 0;
-        if (liffDepAmt <= 0) { alert('請輸入訂金金額!'); return; }
-        if (liffDepAmt >= total) { alert('訂金不可大於等於總金額,要全付請選「轉帳匯款」或「現場付款」!'); return; }
-    }
+    // 【修2】LIFF 統一以轉帳匯款方式處理(編輯舊訂單時 keep 不變)
+    const liffDepAmt = 0;
+    const finalPayMethod = (action === 'update' && lastOrder &&
+                            lastOrder.paymentStatus && lastOrder.paymentStatus !== '未付')
+                           ? 'keep' : 'transfer';
 
     const spiceNote = qty[6]>0 ? `清蒸臭豆腐：${stinkTofuSpice}` : '';
 
@@ -1009,9 +1005,9 @@ function submitOrder() {
             items_qty_array: qty,
             source:      'LINE',
             spiceNote,
-            // 【修 3】帶上付款資訊
-            payMethod: liffPayMode,          // transfer / onsite_full / onsite_deposit
-            depositAmount: liffDepAmt        // 只在 onsite_deposit 時 > 0
+            // 【修2】LIFF 統一走轉帳匯款流程,編輯已付款訂單時用 keep
+            payMethod: finalPayMethod,
+            depositAmount: liffDepAmt
         });
         liff.closeWindow();
     }).catch((err)=>{
