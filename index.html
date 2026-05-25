@@ -168,6 +168,24 @@
     margin-top: 4px;
     font-weight: bold;
 }
+/* 【需求3】日期選單鎖定狀態 */
+select.date-locked {
+    background-color: #fff8e1 !important;
+    border-color: #ff9800 !important;
+    color: #e65100 !important;
+    font-weight: bold;
+}
+.date-lock-hint {
+    display: none;
+    margin-top: 4px;
+    padding: 6px 10px;
+    background: #fff3e0;
+    border-left: 3px solid #ff9800;
+    color: #5d4037;
+    font-size: 0.85em;
+    border-radius: 4px;
+    line-height: 1.4;
+}
 </style>
 </head>
 <body>
@@ -624,6 +642,8 @@ function showMenu() {
     document.getElementById('noticeBanner').style.display = 'block';
     renderMenu();
     calcTotal();
+    // 【需求3】編輯舊訂單載入後若含限定品項,也要鎖定取貨日
+    setTimeout(refreshDateLock, 50);
     if (!isPosMode) document.getElementById('cartBar').classList.add('show');
 }
 
@@ -683,33 +703,88 @@ function renderMenu() {
 }
 
 function upd(i, d) {
-    // 【需求3】先檢查是否能加入(若會違反限定日且使用者明確點 +,給提示但仍允許)
-    if (d > 0 && menuItems[i].requiresDate) {
-        const cur = (document.getElementById('pickupDate') || {}).value
-                 || (document.getElementById('posPickupDate') || {}).value;
-        if (cur && cur !== menuItems[i].requiresDate) {
-            // 先溫和提示,不強制阻止(讓使用者自己決定要不要切日)
-            const dateOpt = document.querySelector(`#pickupDate option[value="${menuItems[i].requiresDate}"], #posPickupDate option[value="${menuItems[i].requiresDate}"]`);
-            const dateLabel = dateOpt ? dateOpt.textContent.trim() : menuItems[i].requiresDate;
-            if (!confirm(`「${menuItems[i].name}」只能在「${dateLabel}」取貨。\n\n按「確定」自動切換取貨日,按「取消」維持原日期(送出時會提醒)`)) {
-                // 取消:仍然加入但日期不變,送出時 validateOrderForm 會擋
-            } else {
-                // 確定:自動切日期
-                ['pickupDate','posPickupDate','editPickupDate'].forEach(id => {
-                    const el = document.getElementById(id);
-                    if (el) {
-                        el.value = menuItems[i].requiresDate;
-                        // 觸發 onchange 同步時間選單
-                        try { el.dispatchEvent(new Event('change')); } catch(e) {}
-                    }
-                });
-            }
-        }
-    }
     qty[i] = Math.max(0, qty[i] + d);
     document.getElementById('q' + i).value = qty[i];
     calcTotal();
+    // 【需求3】更新「日期鎖定」狀態
+    refreshDateLock();
     if (document.getElementById('posModal').style.display === 'flex') updatePosSummary();
+}
+
+/**
+ * 【需求3】根據購物車內容自動鎖定/解鎖取貨日選單
+ *   - 若購物車含「素杏鮑牛腩煲」(任何 item 有 requiresDate)
+ *     → 自動把 pickupDate/posPickupDate/editPickupDate 設成 requiresDate
+ *     → 並 disable 其他不允許的選項
+ *   - 若移除完 → 解除鎖定
+ */
+function refreshDateLock() {
+    // 找出購物車中有沒有限定日期的品項
+    let requiredDate = null;
+    let requiredItemName = null;
+    for (let i = 0; i < menuItems.length; i++) {
+        if (qty[i] > 0 && menuItems[i].requiresDate) {
+            requiredDate = menuItems[i].requiresDate;
+            requiredItemName = menuItems[i].name;
+            break;
+        }
+    }
+
+    ['pickupDate','posPickupDate','editPickupDate'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+
+        // 找對應的時間選單 id
+        const timeId = id.replace('Date','Time');
+        const timeSel = document.getElementById(timeId);
+
+        if (requiredDate) {
+            // 鎖定模式:其他選項 disable,該日強制選中
+            let needSync = false;
+            for (let opt of sel.options) {
+                if (opt.value && opt.value !== requiredDate) {
+                    opt.disabled = true;
+                    opt.style.color = '#ccc';
+                } else if (opt.value === requiredDate) {
+                    opt.disabled = false;
+                    opt.style.color = '';
+                }
+            }
+            // 如果目前選的不是 requiredDate 就強制切換
+            if (sel.value !== requiredDate) {
+                sel.value = requiredDate;
+                needSync = true;
+            }
+            // 加視覺標記
+            sel.classList.add('date-locked');
+
+            // 在 select 下方顯示鎖定原因(若沒已建立 hint 元素就建立)
+            const hintId = id + '_lockHint';
+            let hint = document.getElementById(hintId);
+            if (!hint) {
+                hint = document.createElement('div');
+                hint.id = hintId;
+                hint.className = 'date-lock-hint';
+                sel.parentNode.appendChild(hint);
+            }
+            hint.innerHTML = `🔒 已鎖定取貨日(因含「${requiredItemName}」,此商品限此日取貨)`;
+            hint.style.display = 'block';
+
+            // 同步時間選單(可能本來時間不在新日的可選清單)
+            if (needSync && timeSel && typeof syncTimeOptions === 'function') {
+                syncTimeOptions(id, timeId);
+            }
+        } else {
+            // 解鎖:全部選項恢復
+            for (let opt of sel.options) {
+                opt.disabled = false;
+                opt.style.color = '';
+            }
+            sel.classList.remove('date-locked');
+            const hint = document.getElementById(id + '_lockHint');
+            if (hint) hint.style.display = 'none';
+        }
+    });
 }
 
 function calcTotal() {
@@ -744,6 +819,8 @@ function openPosModal() {
     selPay('none');
     updatePosSummary();
     document.getElementById('posModal').style.display = 'flex';
+    // 【需求3】Modal 打開時也檢查日期鎖定
+    setTimeout(refreshDateLock, 50);
 }
 
 function submitPosOrder() {
@@ -1037,6 +1114,8 @@ function openCart() {
     if (total<=0) { alert('購物車是空的，請先選擇餐點唷！'); return; }
     // 【修2】LIFF 統一走轉帳匯款流程,移除付款方式選項
     document.getElementById('orderModal').style.display='flex';
+    // 【需求3】Modal 打開時也檢查日期鎖定
+    setTimeout(refreshDateLock, 50);
 }
 
 function submitOrder() {
