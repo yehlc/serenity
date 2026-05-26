@@ -186,6 +186,108 @@ select.date-locked {
     border-radius: 4px;
     line-height: 1.4;
 }
+/* 【LINE BOT 確認 Modal】 */
+.review-intro {
+    background: #e3f2fd;
+    padding: 10px 14px;
+    border-left: 4px solid #2196f3;
+    border-radius: 6px;
+    margin-bottom: 14px;
+    color: #1565c0;
+    font-size: 0.9em;
+    line-height: 1.5;
+}
+.cart-review-list {
+    background: #fafafa;
+    border-radius: 8px;
+    padding: 10px 0;
+    max-height: 50vh;
+    overflow-y: auto;
+    margin-bottom: 12px;
+    border: 1px solid #e0e0e0;
+}
+.cart-review-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 10px 14px;
+    border-bottom: 1px solid #eee;
+}
+.cart-review-item:last-child { border-bottom: none; }
+.cart-review-item-info {
+    flex: 1;
+    min-width: 0;
+}
+.cart-review-item-name {
+    font-weight: bold;
+    color: #333;
+    font-size: 1em;
+}
+.cart-review-item-spice {
+    font-size: 0.82em;
+    color: #d32f2f;
+    margin-top: 2px;
+}
+.cart-review-item-vegan {
+    display: inline-block;
+    font-size: 0.72em;
+    margin-left: 6px;
+    padding: 1px 5px;
+    border-radius: 4px;
+}
+.cart-review-item-vegan.lacto-ovo {
+    background: #fff3e0; color: #e65100; border: 1px solid #ffb74d;
+}
+.cart-review-item-vegan.pure-vegan {
+    background: #e8f5e9; color: #2e7d32; border: 1px solid #81c784;
+}
+.cart-review-item-price {
+    font-size: 0.8em;
+    color: #777;
+    margin-top: 2px;
+}
+.cart-review-item-qty {
+    font-weight: bold;
+    color: #1565c0;
+    font-size: 1.1em;
+    margin-left: 12px;
+    white-space: nowrap;
+}
+.cart-review-total {
+    text-align: right;
+    font-size: 1.3em;
+    font-weight: bold;
+    color: #d32f2f;
+    padding: 10px 14px;
+    border-top: 2px solid #ddd;
+    margin-bottom: 14px;
+}
+.cart-review-actions {
+    display: flex;
+    gap: 10px;
+}
+.cart-review-actions button {
+    flex: 1;
+    padding: 14px;
+    font-size: 1em;
+    font-weight: bold;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+}
+.cart-review-actions .btn-secondary {
+    background: #f5f5f5;
+    color: #555;
+    border: 1px solid #ccc;
+}
+.cart-review-actions .btn-secondary:hover { background: #eee; }
+.cart-review-actions .btn-primary {
+    background: linear-gradient(135deg, #4caf50, #2e7d32);
+    color: white;
+}
+.cart-review-actions .btn-primary:hover {
+    background: linear-gradient(135deg, #43a047, #1b5e20);
+}
 </style>
 </head>
 <body>
@@ -297,6 +399,23 @@ select.date-locked {
         </div>
 
         <button class="submit-btn green" id="editSubmitBtn" onclick="submitEditOrder()">✅ 確認修改訂單</button>
+    </div>
+</div>
+
+<!-- 【LINE BOT 確認訂單 Modal】顧客按填寫訂單前的 double check -->
+<div class="modal-overlay" id="cartReviewModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>📋 確認您的訂單</h3>
+            <button class="close-btn" onclick="closeModal('cartReviewModal')">×</button>
+        </div>
+        <div class="review-intro">請確認以下餐點內容,如需修改請點下方「重新修改」</div>
+        <div id="cartReviewList" class="cart-review-list"></div>
+        <div class="cart-review-total" id="cartReviewTotal">合計: NT$ 0</div>
+        <div class="cart-review-actions">
+            <button class="btn-secondary" onclick="closeModal('cartReviewModal')">🔄 重新修改</button>
+            <button class="btn-primary" onclick="confirmCartReview()">✓ 確認送出</button>
+        </div>
     </div>
 </div>
 
@@ -1112,9 +1231,56 @@ function confirmHideOrder(orderId,name) {
 // ══════════════════════════════════════════════════════════
 function openCart() {
     if (total<=0) { alert('購物車是空的，請先選擇餐點唷！'); return; }
-    // 【修2】LIFF 統一走轉帳匯款流程,移除付款方式選項
+    // LINE BOT 模式:先跳出「確認訂單內容」double check modal
+    // POS 模式:本來就不會走這個函式(POS 走 openPosModal)
+    showCartReview();
+}
+
+/**
+ * 【LINE BOT】顯示訂單確認 modal,列出所有點的餐點供顧客 double check
+ *   - 顧客可選「確認送出」→ confirmCartReview() → 打開填寫資訊 modal
+ *   - 顧客可選「重新修改」→ 關閉 modal,菜單狀態自動保留(qty/stinkTofuSpice 不動)
+ */
+function showCartReview() {
+    const list = document.getElementById('cartReviewList');
+    const items = [];
+    menuItems.forEach((item, i) => {
+        if (qty[i] > 0) {
+            const veganClass = item.lactoOvo ? 'lacto-ovo' : 'pure-vegan';
+            const veganLabel = item.lactoOvo ? '奶蛋素' : '純素';
+            // 清蒸臭豆腐(index 6)顯示辣度
+            const spiceNote = (i === 6 && stinkTofuSpice)
+                ? `<div class="cart-review-item-spice">🌶️ 辣度：${stinkTofuSpice}</div>`
+                : '';
+            const subtotal = item.price * qty[i];
+            items.push(`
+                <div class="cart-review-item">
+                    <div class="cart-review-item-info">
+                        <div class="cart-review-item-name">
+                            ${item.name}
+                            <span class="cart-review-item-vegan ${veganClass}">${veganLabel}</span>
+                        </div>
+                        ${spiceNote}
+                        <div class="cart-review-item-price">NT$ ${item.price} / 份 = NT$ ${subtotal}</div>
+                    </div>
+                    <div class="cart-review-item-qty">x ${qty[i]}</div>
+                </div>
+            `);
+        }
+    });
+    list.innerHTML = items.join('');
+    document.getElementById('cartReviewTotal').textContent = '合計: NT$ ' + total;
+    document.getElementById('cartReviewModal').style.display = 'flex';
+}
+
+/**
+ * 顧客按「確認送出」→ 關閉確認 modal、打開填寫資訊 modal
+ */
+function confirmCartReview() {
+    closeModal('cartReviewModal');
+    // 進入填寫資訊 modal
     document.getElementById('orderModal').style.display='flex';
-    // 【需求3】Modal 打開時也檢查日期鎖定
+    // 【需求3】填寫資訊 Modal 打開時也檢查日期鎖定
     setTimeout(refreshDateLock, 50);
 }
 
