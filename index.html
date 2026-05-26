@@ -426,13 +426,13 @@ select.date-locked {
     <div class="modal-content">
         <div class="modal-header">
             <h3>📋 確認您的訂單</h3>
-            <button class="close-btn" onclick="closeModal('cartReviewModal')">×</button>
+            <button class="close-btn" onclick="backToOrderForm()">×</button>
         </div>
         <div class="review-intro">請確認以下訂單資訊與餐點。<br>如需修改請點下方「重新修改」回到填寫頁面。</div>
         <div id="cartReviewList" class="cart-review-list"></div>
         <div class="cart-review-total" id="cartReviewTotal">合計: NT$ 0</div>
         <div class="cart-review-actions">
-            <button class="btn-secondary" onclick="closeModal('cartReviewModal')">🔄 重新修改</button>
+            <button class="btn-secondary" onclick="backToOrderForm()">🔄 重新修改</button>
             <button class="btn-primary" onclick="confirmCartReview()">✓ 確認送出</button>
         </div>
     </div>
@@ -1267,6 +1267,8 @@ let _pendingSubmitPayload = null;
  */
 function showCartReview(payload) {
     _pendingSubmitPayload = payload;  // 暫存待送出資料
+    // 【需求2】關閉填寫資訊 modal,只顯示確認 modal
+    closeModal('orderModal');
     const list = document.getElementById('cartReviewList');
     const items = [];
 
@@ -1323,22 +1325,34 @@ function confirmCartReview() {
         return;
     }
     const payload = _pendingSubmitPayload;
+    // 【需求2 重點】一旦進到這裡就立刻清空 _pendingSubmitPayload,避免使用者短時間重複按
+    _pendingSubmitPayload = null;
     closeModal('cartReviewModal');
-    // 關閉填寫資訊 modal
-    closeModal('orderModal');
+    closeModal('orderModal');  // 雙保險:確保填寫 modal 也是關的
 
     setBtnState('submitBtn','訂單傳送中...',true);
     liff.getProfile().then(profile=>{
         payload.userId = profile.userId;
-        postGasFireAndForget(payload);
-        _pendingSubmitPayload = null;
+        postGasFireAndForget(payload);  // ★ 這裡才真正寫入 Google Sheet
         liff.closeWindow();
     }).catch((err)=>{
         console.error(err);
         setBtnState('submitBtn','確認送出訂單',false);
-        // 失敗時恢復顯示填寫資訊 modal,讓使用者重試
+        // 失敗時恢復 _pendingSubmitPayload + 顯示填寫 modal,讓使用者重試
+        _pendingSubmitPayload = payload;
         document.getElementById('orderModal').style.display='flex';
     });
+}
+
+/**
+ * 【需求2】「重新修改」按鈕綁定:關閉確認 modal、重新打開填寫資訊 modal
+ * 注意:_pendingSubmitPayload 故意留著(萬一使用者跳很多次也不會丟失)
+ * 真正送出後 confirmCartReview 才會清空
+ */
+function backToOrderForm() {
+    closeModal('cartReviewModal');
+    document.getElementById('orderModal').style.display='flex';
+    setTimeout(refreshDateLock, 50);
 }
 
 function submitOrder() {
