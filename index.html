@@ -22,7 +22,6 @@
 
         .menu-container{padding:10px;}
         .menu-item{background:#fff;border-radius:10px;padding:15px;margin-bottom:12px;display:flex;align-items:center;box-shadow:0 2px 5px rgba(0,0,0,.05);}
-        .menu-item img{width:80px;height:80px;border-radius:8px;object-fit:cover;margin-right:15px;background:#eee;}
         .menu-item-info{flex-grow:1;}
         .menu-item-title{font-size:1.1em;font-weight:bold;color:#333;margin-bottom:5px;}
         .menu-item-price{color:#e91e63;font-weight:bold;font-size:1.1em;}
@@ -604,7 +603,7 @@ const menuItems = [
     {name:"祥和拼盤",  price:800,  lactoOvo:true },  // 0
     {name:"佛跳牆",    price:1380                 }, // 1
     {name:"肉骨茶鍋",  price:1380                 }, // 2
-    {name:"酸白菜鍋",  price:860,  lactoOvo:true                  }, // 3
+    {name:"酸白菜鍋",  price:860,  lactoOvo:true }, // 3
     {name:"麻油鍋",    price:860,  lactoOvo:true }, // 4
     {name:"紅燒獅子頭",price:640,  lactoOvo:true }, // 5
     {name:"清蒸臭豆腐",price:640                  }, // 6 ← 有辣度選項
@@ -621,16 +620,16 @@ const menuItems = [
     {name:"椒麻油飯",  price:300,  lactoOvo:true }, // 17
     {name:"炒炊粉",    price:180                  }, // 18
     {name:"原味蘿蔔糕",price:200                  }, // 19
-    {name:"酥香蘿蔔糕",price:280,  lactoOvo:true                  }, // 20
+    {name:"酥香蘿蔔糕",price:280,  lactoOvo:true }, // 20
     {name:"松露蘿蔔糕",price:380                  }  // 21 ← 新菜色,對應 Sheet X 欄
 ];
 
 /* 【修改4】各日期對應可選取貨時間
-   2027-02-04（除夕前一天）：12:00 / 13:00 / 14:00 / 15:30
-   2027-02-05（除夕）：僅 12:00                              */
+   2027-02-04（除夕前一天）：僅 12:00
+   2027-02-05（除夕）：12:00 / 13:00 / 14:00 / 15:30          */
 const PICKUP_TIME_MAP = {
-    '2027-02-04': ['12:00'],  // 除夕前一天:全天時段
-    '2027-02-05': ['12:00','13:00','14:00','15:30']                            // 除夕:僅中午
+    '2027-02-04': ['12:00'],                            // 除夕前一天:僅中午
+    '2027-02-05': ['12:00','13:00','14:00','15:30']     // 除夕:全天時段
 };
 
 const STATUS_COLOR = {
@@ -846,7 +845,6 @@ function renderMenu() {
         }
 
         div.innerHTML = `
-            <img src="https://via.placeholder.com/80?text=圖片" alt="${item.name}">
             <div class="menu-item-info">
                 <div class="menu-item-title">
                     ${item.name}
