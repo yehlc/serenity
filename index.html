@@ -1473,10 +1473,9 @@ async function printOrderViaLAN(order) {
         });
         clearTimeout(timer);
         const respText = await resp.text();
-        // Star 印表機回的 XML 有兩種格式：
-        // 格式A (一般)：<success>true</success>
-        // 格式B (mC-Print3 實際回傳)：Response 內容為 HTML 實體編碼
-        //   → &lt;success&gt;true&lt;/success&gt;
+        // Star mC-Print3 實際回傳格式：Response 內容為 HTML 實體編碼
+        // &lt;root&gt;&lt;success&gt;true&lt;/success&gt;...
+        // 需同時判斷兩種格式
         const isSuccess =
             /<success>\s*true\s*<\/success>/i.test(respText) ||
             /&lt;success&gt;\s*true\s*&lt;\/success&gt;/i.test(respText);
@@ -1525,7 +1524,9 @@ function buildStarPrintXML(order) {
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
-        return `  <text codepage='utf8' international='usa'>${safe}\n</text>`;
+        // ★ 修正：Star WebPRNT 中文 UTF-8 文字只需 <text>，
+        //   加上 codepage/international 屬性反而讓印表機無法識別中文而靜默不印
+        return `  <text>${safe}\n</text>`;
     }).join('\n');
 
     return `<?xml version="1.0" encoding="UTF-8"?>
@@ -1533,7 +1534,7 @@ function buildStarPrintXML(order) {
   <initialization/>
   <alignment position='left'/>
 ${xmlBody}
-  <feed line='2'/>
+  <feed line='3'/>
   <cutpaper feed='true' type='partial'/>
 </root>`;
 }
