@@ -365,7 +365,7 @@ select.date-locked {
         <div class="modal-header">
             <h3>📋 訂單管理</h3>
             <div style="display:flex;gap:8px;align-items:center;">
-                <button onclick="runTestPrint()" style="font-size:.75em;padding:4px 10px;background:#e65100;color:#fff;border:none;border-radius:6px;cursor:pointer;white-space:nowrap;">🖨️ 印表機測試</button>
+                <button onclick="runTestPrint()" style="font-size:.75em;padding:4px 10px;background:#e65100;color:#fff;border:none;border-radius:6px;cursor:pointer;">🖨️ 印表機測試</button>
                 <button class="close-btn" onclick="closeModal('searchModal')">×</button>
             </div>
         </div>
@@ -648,7 +648,7 @@ let lastOrder = null, action = 'new', posPayMode = 'none', editPayMode = 'none';
 //  內網列印設定 — Star mC-Print3 WebPRNT
 // ══════════════════════════════════════════════════════════
 // 印表機端點(HTTPS 必須,因為頁面本身是 https)
-const PRINTER_URL = 'https://172.18.0.127/StarWebPRNT/SendMessage'; // HTTPS: 需先在 Chrome 信任憑證
+const PRINTER_URL = 'https://172.18.0.127/StarWebPRNT/SendMessage';
 const PRINTER_TIMEOUT_MS = 8000;
 let isPosMode = false, isEditMode = false;
 let currentEditOrder = null;
@@ -1448,7 +1448,7 @@ function setBtnState(id,txt,disabled){const b=document.getElementById(id);b.inne
 // ══════════════════════════════════════════════════════════════════
 //  Star mC-Print3 內網列印功能
 //   - 透過 https://172.18.0.127/StarWebPRNT/SendMessage
-//   - 用 Star WebPRNT XML 格式，<text> 不帶屬性 (UTF-8 中文直接送即可)
+//   - 用 Star WebPRNT XML 格式，<text> 不帶 codepage 屬性 (T-Chinese U4.0 支援 UTF-8)
 //   - iPad/手機必須先信任印表機的自簽憑證(設定一次即可)
 // ══════════════════════════════════════════════════════════════════
 
@@ -1476,27 +1476,18 @@ async function printOrderViaLAN(order) {
         });
         clearTimeout(timer);
         const respText = await resp.text();
-        console.log('[列印] 印表機原始回應:', respText.substring(0, 500));
-        // ★ mC-Print3 回傳格式：<Response> 內容為 HTML 實體編碼
+        console.log('[列印] 印表機回應:', respText.substring(0, 500));
         const isSuccess =
             /<success>\s*true\s*<\/success>/i.test(respText) ||
             /&lt;success&gt;\s*true\s*&lt;\/success&gt;/i.test(respText);
-        // 解析 status bytes 做人性化警告
-        const statusMatch = respText.match(/&lt;status&gt;([0-9A-Fa-f]+)&lt;\/status&gt;/);
-        let statusWarn = '';
-        if (statusMatch) {
-            const hex = statusMatch[1];
-            const b = (i) => parseInt(hex.slice(i*2, i*2+2) || '0', 16);
-            const b0 = b(0), b1 = b(1);
-            if ((b0 >> 3) & 1) statusWarn += '\n⚠️ 紙卷快沒了 (Paper Near End)！請換新紙卷';
-            if ((b1 >> 3) & 1) statusWarn += '\n❌ 印表機因紙張問題進入離線狀態，換紙後重啟印表機';
-            if ((b1 >> 2) & 1) statusWarn += '\n❌ 切刀錯誤 (Autocutter Error)';
-            if (statusWarn) console.warn('[列印] 印表機狀態警告:', statusWarn);
+        const statusInfo = decodeStarStatus(respText);
+        if (statusInfo.offline) {
+            // success=true 但 offline → 工作已被 Cancel (Print after Error: Cancel)
+            return { ok: false, msg: '⚠️ 印表機離線，列印工作已取消\n\n' + statusInfo.msg +
+                '\n\n【重要】解決錯誤後需重新按列印，已取消的工作不會自動重印。' };
         }
-        if (isSuccess) {
-            return { ok: true, msg: '✅ 已成功列印' + statusWarn };
-        }
-        return { ok: false, msg: '⚠️ 印表機回報失敗:\n' + respText.substring(0, 200) };
+        if (isSuccess) return { ok: true, msg: '✅ 已成功列印' };
+        return { ok: false, msg: '⚠️ 印表機拒絕指令:\n' + respText.substring(0, 200) };
     } catch(e) {
         if (e.name === 'AbortError') {
             return { ok: false, msg: '⏱️ 列印超時(印表機沒回應,請檢查印表機電源/網路)' };
@@ -1504,14 +1495,11 @@ async function printOrderViaLAN(order) {
         // 常見失敗原因
         let hint = '';
         const eStr = String(e);
-        console.error('[列印] fetch 錯誤:', String(e), e);
+        console.error('[列印] 連線錯誤:', String(e));
         if (/Failed to fetch|NetworkError|blocked|CORS|Load failed/i.test(eStr)) {
-            hint = '\n\n【Chrome LNA 限制解除步驟】\n' +
-                   '① Chrome 網址列輸入:\n' +
-                   '   chrome://flags/#private-network-access-send-preflights\n' +
-                   '   → 改為 Disabled → 重啟 Chrome\n\n' +
-                   '② 確認已信任印表機 SSL 憑證:\n' +
-                   '   用 Chrome 開啟 https://172.18.0.127 → 進階 → 繼續前往';
+            hint = '\n\n① 安裝 StarCertificate.cer 到 Windows 受信任根憑證\n' +
+                   '② chrome://flags/#private-network-access-send-preflights → Disabled\n' +
+                   '③ 確認設備連接店內 WIFI (172.18.x.x 網段)';
         }
         return { ok: false, msg: '❌ 列印失敗:' + e.message + hint };
     }
@@ -1544,7 +1532,7 @@ function buildStarPrintXML(order) {
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
-        // ★ 不帶 codepage/international — 加了反而讓中文靜默不印
+        // ★ 不加 codepage/international：加了反而讓中文靜默不印
         return `  <text>${safe}\n</text>`;
     }).join('\n');
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -1555,62 +1543,88 @@ ${xmlBody}
   <feed line='6'/>
   <cutpaper feed='true' type='full'/>
 </root>`;
-    console.log('[列印] 送出 XML:\n', xml);
+    console.log('[列印] XML:', xml);
     return xml;
 }
 
-// ★ 測試列印 (ASCII + 中文混合，診斷用)
-function buildTestXML() {
-    return `<?xml version="1.0" encoding="UTF-8"?>
+/**
+ * 解析 Star ASB status bytes → 人性化狀態物件
+ * 基於 mC-Print3 自我測試分析:
+ *   Byte0 bit3 = NE Detect (NE Detect: Valid 啟用)
+ *   Byte1 bit3 = Offline due to NE (Print after Error: Cancel 會取消工作)
+ *   Byte1 bit2 = Cover Open
+ */
+function decodeStarStatus(respText) {
+    const result = { offline: false, nearEnd: false, coverOpen: false, msg: '' };
+    const m = respText.match(/&lt;status&gt;([0-9A-Fa-f]+)&lt;\/status&gt;/) ||
+              respText.match(/status[>)]([0-9A-Fa-f]{4,})/i);
+    if (!m) return result;
+    const hex = m[1];
+    const by = (i) => parseInt(hex.slice(i*2, i*2+2) || '0', 16);
+    const b0 = by(0), b1 = by(1), b11 = by(11);
+    const msgs = [];
+
+    if (!((b0 >> 5) & 1)) {
+        result.offline = true;
+        msgs.push('❌ 印表機離線 (Offline)');
+    }
+    if ((b0 >> 3) & 1 || b11 & 0x06) {
+        result.nearEnd = true;
+        result.offline = true;
+        msgs.push('⚠️ 紙捲感測器觸發 (Near End Detect)\n   → 確認紙捲是否裝好/足夠');
+    }
+    if ((b1 >> 3) & 1) {
+        result.offline = true;
+        msgs.push('❌ 因紙張問題自動離線\n   → 印表機設定: Print after Error = Cancel\n   → 修復後須重新送出列印指令');
+    }
+    if ((b1 >> 2) & 1) {
+        result.offline = true;
+        msgs.push('❌ 上蓋未關閉 (Cover Open)');
+    }
+    result.msg = msgs.join('\n');
+    return result;
+}
+
+// ★ 印表機連線與狀態測試
+async function runTestPrint() {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <root>
   <initialization/>
-  <text>===== PRINT TEST =====\n</text>
+  <alignment position='left'/>
+  <text>===== STAR TEST PRINT =====\n</text>
   <text>${new Date().toLocaleString('zh-TW')}\n</text>
-  <text>--- Chinese test ---\n</text>
-  <text>祥和年菜 NT$1640\n</text>
-  <text>陳東東 0917-xxx-732\n</text>
-  <text>====================\n</text>
+  <text>---------------------------\n</text>
+  <text>ASCII : Hello World 123\n</text>
+  <text>CJK   : 祥和年菜 NT$1640\n</text>
+  <text>===========================\n</text>
   <feed line='6'/>
   <cutpaper feed='true' type='full'/>
 </root>`;
-}
-
-async function runTestPrint() {
-    const xml = buildTestXML();
-    console.log('[測試列印] 送出:', xml);
     try {
         const ctrl = new AbortController();
         setTimeout(() => ctrl.abort(), 10000);
         const resp = await fetch(PRINTER_URL, {
-            method: 'POST',
+            method: 'POST', signal: ctrl.signal,
             headers: { 'Content-Type': 'text/xml; charset=UTF-8' },
-            body: xml,
-            signal: ctrl.signal,
-            targetAddressSpace: 'private'
+            body: xml, targetAddressSpace: 'private'
         });
         const txt = await resp.text();
         console.log('[測試列印] 回應:', txt);
         const ok = /<success>\s*true\s*<\/success>/i.test(txt) ||
                    /&lt;success&gt;\s*true\s*&lt;\/success&gt;/i.test(txt);
-        // 解析 status
-        const sm = txt.match(/&lt;status&gt;([0-9A-Fa-f]+)&lt;\/status&gt;/);
-        let warn = '';
-        if (sm) {
-            const b0 = parseInt(sm[1].slice(0,2),16);
-            const b1 = parseInt(sm[1].slice(2,4),16);
-            if ((b0>>3)&1) warn += '\n⚠️ 紙卷快沒了！請換新紙卷後重啟印表機';
-            if ((b1>>3)&1) warn += '\n❌ 印表機因紙快沒了進入離線狀態';
+        const st = decodeStarStatus(txt);
+        if (st.offline) {
+            alert('⚠️ 印表機狀態異常，無法列印\n\n' + st.msg);
+        } else if (ok) {
+            alert('✅ 測試列印送出！\n請確認是否有收據跑出來。');
+        } else {
+            alert('❌ 印表機拒絕指令:\n' + txt.substring(0, 200));
         }
-        alert((ok ? '✅ 測試指令送出成功！' : '❌ 測試失敗') + warn +
-              (ok && !warn ? '\n\n請確認印表機是否有出紙。' : ''));
     } catch(e) {
-        console.error('[測試列印] 錯誤:', e);
-        const isLNA = /blocked|CORS|Failed to fetch|Load failed/i.test(String(e));
-        alert('❌ 連線失敗：' + e.message +
-              (isLNA ? '\n\n【Chrome LNA 擋住了請求】\n請依序操作：\n' +
-               '① 在 Chrome 網址列輸入：\n  chrome://flags/#private-network-access-send-preflights\n' +
-               '   → 改為 Disabled → 重啟 Chrome\n\n' +
-               '② 或先開啟 https://172.18.0.127 信任印表機憑證' : ''));
+        console.error('[測試列印]', e);
+        alert('❌ 無法連接印表機: ' + e.message +
+            '\n\n① 先在 Chrome 開啟 https://172.18.0.127 信任憑證\n' +
+            '② chrome://flags/#private-network-access-send-preflights → Disabled → 重啟 Chrome');
     }
 }
 
