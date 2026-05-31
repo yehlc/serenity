@@ -1473,8 +1473,14 @@ async function printOrderViaLAN(order) {
         });
         clearTimeout(timer);
         const respText = await resp.text();
-        // Star 印表機回的 XML <success>true</success> 代表成功
-        if (/<success>\s*true\s*<\/success>/i.test(respText)) {
+        // Star 印表機回的 XML 有兩種格式：
+        // 格式A (一般)：<success>true</success>
+        // 格式B (mC-Print3 實際回傳)：Response 內容為 HTML 實體編碼
+        //   → &lt;success&gt;true&lt;/success&gt;
+        const isSuccess =
+            /<success>\s*true\s*<\/success>/i.test(respText) ||
+            /&lt;success&gt;\s*true\s*&lt;\/success&gt;/i.test(respText);
+        if (isSuccess) {
             return { ok: true, msg: '✅ 已成功列印' };
         }
         return { ok: false, msg: '⚠️ 印表機回報失敗:' + respText.substring(0, 200) };
