@@ -1481,11 +1481,18 @@ async function printOrderViaLAN(order) {
             /<success>\s*true\s*<\/success>/i.test(respText) ||
             /&lt;success&gt;\s*true\s*&lt;\/success&gt;/i.test(respText);
         const st = decodeStarStatus(respText);
-        if (st.coverOpen) return { ok: false, msg: '❌ 印表機上蓋未關，請蓋好後重試。' };
-        // NE Detect 導致 Error → 通知呼叫端嘗試兩步驟清除
-        if (st.nearEndError) return { ok: false, nearEndError: true, msg: st.msg };
-        if (!isSuccess) return { ok: false, msg: '⚠️ 印表機拒絕指令:\n' + respText.substring(0,200) };
-        return { ok: true, msg: '✅ 已成功列印' };
+
+        // 上蓋未關 → 一定失敗
+        if (st.coverOpen) return { ok: false, msg: '❌ 上蓋未關閉，請蓋好後重試。' };
+
+        // ★ 印表機真正離線（byte0 bit5=0）才算失敗
+        if (st.trulyOffline) return { ok: false, msg: '❌ 印表機離線，請確認電源和連線。' };
+
+        // success=true → 信任印表機，即使 NE bit 還在也算成功
+        // NE bit 只是物理感測器狀態回報，停用後不影響列印
+        if (isSuccess) return { ok: true, msg: '✅ 已成功列印' };
+
+        return { ok: false, msg: '⚠️ 印表機拒絕指令:\n' + respText.substring(0, 200) };
     } catch(e) {
         if (e.name === 'AbortError') {
             return { ok: false, msg: '⏱️ 列印超時(印表機沒回應,請檢查印表機電源/網路)' };
@@ -1495,9 +1502,9 @@ async function printOrderViaLAN(order) {
         const eStr = String(e);
         console.error('[列印] 連線錯誤:', String(e));
         if (/Failed to fetch|NetworkError|blocked|CORS|Load failed/i.test(eStr)) {
-            hint = '\n\n請確認：\n① Chrome 已信任 https://172.18.0.127 憑證\n' +
-                   '② chrome://flags/#private-network-access-send-preflights → Disabled\n' +
-                   '③ 設備連接店內 WIFI';
+            hint = '\n\n請確認：\n① 印表機已開機\n' +
+                   '② Chrome 已信任 https://172.18.0.127 憑證\n' +
+                   '③ chrome://flags/#private-network-access-send-preflights → Disabled';
         }
         return { ok: false, msg: '❌ 列印失敗:' + e.message + hint };
     }
@@ -1545,63 +1552,35 @@ ${xmlBody}
 }
 
 /**
- * 解析 Star mC-Print3 ASB status bytes
- * Memory Switch 設定（從自我測試收據讀取）:
- *   <A>8 NE Detect: Valid  → byte0 bit3 觸發時代表紙捲感測器亮起
- *   <B>C Print after Error: Cancel → 錯誤時取消工作
- *   byte0 bit5 = Online (1=在線)
- *   byte1 bit3 = Error flag
+ * ★ 正確的 Star ASB 狀態解析
+ *
+ * 判斷邏輯（優先序）：
+ * 1. 上蓋開啟 (byte1 bit2) → 一定無法列印
+ * 2. 真正離線 (byte0 bit5=0) → 無法列印
+ * 3. 其餘（含 NE bit）→ 只是感測器物理狀態，不代表列印失敗
+ *    - NE Detect 已停用後，NE bit 可能仍為 1 但不影響列印
+ *    - 以 success=true 為最終判斷依據
  */
 function decodeStarStatus(respText) {
-    const r = { coverOpen: false, nearEnd: false, nearEndError: false, msg: '' };
+    const r = { trulyOffline: false, coverOpen: false, nearEnd: false, msg: '' };
     const m = respText.match(/&lt;status&gt;([0-9A-Fa-f]+)&lt;\/status&gt;/) ||
               respText.match(/status[>)]([0-9A-Fa-f]{4,})/i);
     if (!m) return r;
     const hex = m[1];
     const by = (i) => parseInt(hex.slice(i*2, i*2+2) || '0', 16);
     const b0 = by(0), b1 = by(1);
-    r.coverOpen  = Boolean((b1 >> 2) & 1);          // byte1 bit2
-    r.nearEnd    = Boolean((b0 >> 3) & 1);           // byte0 bit3
-    const errFlag = Boolean((b1 >> 3) & 1);          // byte1 bit3
-    r.nearEndError = r.nearEnd && errFlag;
-    if (r.nearEndError) {
-        r.msg = '⚠️ NE Detect 感測器觸發 + Error 旗標\n' +
-                '→ Print after Error: Cancel 設定導致工作被取消\n\n' +
-                '【要永久解決，請改印表機設定】\n' +
-                '請把 http://172.18.0.127 網頁截圖給我看，\n' +
-                '或嘗試以下步驟：\n' +
-                '① 在左側選單往下捲，找「System Access」\n' +
-                '② 或試著登入 root 帳號（可能有更多設定）\n' +
-                '③ 或執行「印表機復原列印」(按下方按鈕)';
-    }
+
+    r.coverOpen    = Boolean((b1 >> 2) & 1);   // byte1 bit2 = Cover open
+    r.trulyOffline = !((b0 >> 5) & 1);          // byte0 bit5 = 0 → offline
+    r.nearEnd      = Boolean((b0 >> 3) & 1);    // byte0 bit3 = NE (物理狀態，僅參考)
+
+    if (r.coverOpen)    r.msg = '❌ 上蓋未關';
+    else if (r.trulyOffline) r.msg = '❌ 印表機離線';
+    else if (r.nearEnd) r.msg = '⚠️ NE 感測器物理狀態仍觸發（已停用，不影響列印）';
     return r;
 }
 
-/**
- * 兩步驟列印：先送 init 嘗試清除 Error 旗標，再送列印
- * 原理：ESC @ (initialization) 可能暫時清除 Error 狀態
- *       若能在 NE 重新觸發前送出列印，就能成功
- */
-async function twoStepPrint(order) {
-    console.log('[兩步驟] Step1: 送出 initialization 清除 Error...');
-    const INIT = '<?xml version="1.0" encoding="UTF-8"?>\n<root>\n  <initialization/>\n</root>';
-    for (let i = 0; i < 2; i++) {   // 嘗試兩次初始化
-        try {
-            const c = new AbortController();
-            setTimeout(() => c.abort(), 4000);
-            await fetch(PRINTER_URL, {
-                method: 'POST', signal: c.signal,
-                headers: { 'Content-Type': 'text/xml; charset=UTF-8' },
-                body: INIT, targetAddressSpace: 'private'
-            });
-        } catch(e) { console.warn('[兩步驟] init 失敗:', e.message); }
-        await new Promise(r => setTimeout(r, 200));
-    }
-    console.log('[兩步驟] Step2: 送出列印指令...');
-    return await printOrderViaLAN(order);
-}
-
-// ★ 測試列印按鈕
+// ★ 測試列印
 async function runTestPrint() {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <root>
@@ -1626,19 +1605,15 @@ async function runTestPrint() {
         const ok = /<success>\s*true\s*<\/success>/i.test(txt) ||
                    /&lt;success&gt;\s*true\s*&lt;\/success&gt;/i.test(txt);
         const st = decodeStarStatus(txt);
-        if (st.nearEndError) {
-            const go = confirm(st.msg + '\n\n要嘗試「兩步驟強制列印」嗎？\n(可能可以繞過 NE Detect 錯誤)');
-            if (go) {
-                const r2 = await twoStepPrint({ orderId:'TEST', name:'測試', phone:'', branch:'',
-                    date:'', time:'', total:0, status:'', deposit:0, paid:0, items:[], spiceNote:'' });
-                alert(r2.ok ? '✅ 強制列印成功！' : '❌ 仍然失敗\n需要從印表機管理介面關閉 NE Detect');
-            }
-        } else {
-            alert(ok ? '✅ 測試列印送出！請確認是否有收據跑出來。' : '❌ 失敗：' + txt.substring(0,200));
-        }
+        console.log('[測試列印] 回應:', txt, '狀態:', st);
+        if (st.coverOpen)    alert('❌ 上蓋未關，請關閉上蓋後重試。');
+        else if (st.trulyOffline) alert('❌ 印表機離線，請確認電源和網路連線。');
+        else if (ok)         alert('✅ 測試列印送出！請確認是否有收據跑出來。');
+        else                 alert('❌ 失敗：' + txt.substring(0, 200));
     } catch(e) {
         alert('❌ 無法連接: ' + e.message +
-            '\n\n請先用 Chrome 開啟 https://172.18.0.127 信任憑證');
+            '\n\n請確認：\n① Chrome 已信任 https://172.18.0.127 憑證\n' +
+            '② chrome://flags/#private-network-access-send-preflights → Disabled');
     }
 }
 
@@ -1751,16 +1726,8 @@ async function handlePrintOrder(orderJson) {
         btn.disabled = true;
         btn.innerText = '⏳ 列印中...';
     }
-    let result = await printOrderViaLAN(order);
-    // NE Detect 錯誤 → 自動嘗試兩步驟清除後重印
-    if (!result.ok && result.nearEndError) {
-        console.log('[列印] NE Detect 錯誤，嘗試兩步驟列印...');
-        result = await twoStepPrint(order);
-    }
-    if (btn) {
-        btn.disabled = false;
-        btn.innerText = '🖨️ 列印';
-    }
+    const result = await printOrderViaLAN(order);
+    if (btn) { btn.disabled = false; btn.innerText = '🖨️ 列印'; }
     if (result.ok) {
         // 簡單成功提示(不打斷流程)
         if (btn) {
