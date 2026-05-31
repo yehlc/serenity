@@ -364,7 +364,10 @@ select.date-locked {
     <div class="modal-content">
         <div class="modal-header">
             <h3>📋 訂單管理</h3>
-            <button class="close-btn" onclick="closeModal('searchModal')">×</button>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <button onclick="runTestPrint()" style="font-size:.75em;padding:4px 10px;background:#e65100;color:#fff;border:none;border-radius:6px;cursor:pointer;white-space:nowrap;">🖨️ 印表機測試</button>
+                <button class="close-btn" onclick="closeModal('searchModal')">×</button>
+            </div>
         </div>
         <div class="form-group" style="margin-bottom:5px;">
             <label>電話末三碼篩選</label>
@@ -645,11 +648,9 @@ let lastOrder = null, action = 'new', posPayMode = 'none', editPayMode = 'none';
 //  內網列印設定 — Star mC-Print3 WebPRNT
 // ══════════════════════════════════════════════════════════
 // 印表機端點(HTTPS 必須,因為頁面本身是 https)
-// ★★★ 印表機 URL 設定 ★★★
-// HTTPS 版本(印表機原廠預設): 需先在 Chrome 信任自簽憑證
-const PRINTER_URL = 'http://172.18.0.127/StarWebPRNT/SendMessage';
-// 若頁面本身是 HTTPS，請改回上面為 https:// (否則 Mixed Content 會被擋)
-// const PRINTER_URL = 'https://172.18.0.127/StarWebPRNT/SendMessage';
+// ★ 印表機 URL — 必須與頁面同協議(頁面 HTTPS → 這裡也用 HTTPS)
+// 首次使用請先在 Chrome 開啟 https://172.18.0.127 並信任憑證
+const PRINTER_URL = 'https://172.18.0.127/StarWebPRNT/SendMessage';
 const PRINTER_TIMEOUT_MS = 8000;
 let isPosMode = false, isEditMode = false;
 let currentEditOrder = null;
@@ -1449,7 +1450,7 @@ function setBtnState(id,txt,disabled){const b=document.getElementById(id);b.inne
 // ══════════════════════════════════════════════════════════════════
 //  Star mC-Print3 內網列印功能
 //   - 透過 https://172.18.0.127/StarWebPRNT/SendMessage
-//   - 用 Star WebPRNT XML 格式，<text> 不帶 codepage/international 屬性(UTF-8 中文需如此)
+//   - 用 Star WebPRNT XML 格式，<text> 不帶屬性(UTF-8 中文用純 <text> 即可)
 //   - iPad/手機必須先信任印表機的自簽憑證(設定一次即可)
 // ══════════════════════════════════════════════════════════════════
 
@@ -1477,17 +1478,16 @@ async function printOrderViaLAN(order) {
         });
         clearTimeout(timer);
         const respText = await resp.text();
-        console.log('[列印] 印表機原始回應:', respText.substring(0, 300));
-        // ★ Star mC-Print3 實際回傳格式：<Response> 內為 HTML 實體編碼
-        //   &lt;root&gt;&lt;success&gt;true&lt;/success&gt;&lt;code&gt;0&lt;/code&gt;
-        //   需同時判斷兩種格式
+        console.log('[列印] 印表機原始回應:', respText.substring(0, 400));
+        // ★ mC-Print3 實際回傳：<Response> 內容為 HTML 實體編碼
+        //   &lt;root&gt;&lt;success&gt;true&lt;/success&gt;...
         const isSuccess =
             /<success>\s*true\s*<\/success>/i.test(respText) ||
             /&lt;success&gt;\s*true\s*&lt;\/success&gt;/i.test(respText);
         if (isSuccess) {
             return { ok: true, msg: '✅ 已成功列印' };
         }
-        return { ok: false, msg: '⚠️ 印表機回報失敗:\n' + respText.substring(0, 200) };
+        return { ok: false, msg: '⚠️ 印表機回報失敗:\n' + respText.substring(0, 300) };
     } catch(e) {
         if (e.name === 'AbortError') {
             return { ok: false, msg: '⏱️ 列印超時(印表機沒回應,請檢查印表機電源/網路)' };
@@ -1496,17 +1496,16 @@ async function printOrderViaLAN(order) {
         let hint = '';
         const eStr = String(e);
         console.error('[列印] fetch 錯誤:', eStr, e);
-        if (/Failed to fetch|NetworkError|blocked|CORS|cross|Load failed/i.test(eStr)) {
-            hint = '\n\n👉 解決步驟：\n\n' +
-                   '【步驟1】在 Chrome 網址列輸入：\n' +
-                   'chrome://flags/#block-insecure-private-network-requests\n' +
-                   '→ 找到該項目改為「Disabled」→ 重新啟動 Chrome\n\n' +
-                   '【步驟2】確認印表機憑證已信任：\n' +
-                   '用 Chrome 開啟 http://172.18.0.127\n' +
-                   '確認能進入印表機管理介面\n\n' +
-                   '【步驟3】確認設備連接的是店內 WIFI';
+        if (/Failed to fetch|NetworkError|blocked|CORS|Load failed|ERR_/i.test(eStr)) {
+            hint = '\n\n【解決步驟】\n' +
+                   '① 在 Chrome 開啟 https://172.18.0.127\n' +
+                   '  → 點「進階」→「繼續前往」信任憑證\n' +
+                   '  → 確認能看到印表機管理畫面\n\n' +
+                   '② 若仍失敗，在 Chrome 網址列輸入：\n' +
+                   '  chrome://flags/#block-insecure-private-network-requests\n' +
+                   '  → 改為 Disabled → 重啟 Chrome';
         }
-        return { ok: false, msg: '❌ 列印失敗：' + e.message + hint };
+        return { ok: false, msg: '❌ 列印失敗:' + e.message + hint };
     }
 }
 
@@ -1532,28 +1531,69 @@ async function printOrderViaLAN(order) {
 function buildStarPrintXML(order) {
     const lines = buildOrderTextLines(order);
     const xmlBody = lines.map(line => {
-        // 處理 XML 特殊字元
         const safe = String(line)
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
-        // ★ 修正：移除 codepage='utf8' international='usa'
-        //   這兩屬性是給西歐單位元組字碼頁用的
-        //   加上後印表機用 USA 字元集解析 → 無法識別中文 → 靜默不印
-        //   Star mC-Print3 + UTF-8 中文：直接用 <text> 不帶屬性即可
+        // ★ 不加 codepage/international 屬性
+        //   加了反而讓印表機用西歐字碼頁解析 UTF-8 → 中文靜默不印
         return `  <text>${safe}\n</text>`;
     }).join('\n');
-
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <root>
   <initialization/>
   <alignment position='left'/>
 ${xmlBody}
-  <feed line='3'/>
-  <cutpaper feed='true' type='partial'/>
+  <feed line='6'/>
+  <cutpaper feed='true' type='full'/>
 </root>`;
     console.log('[列印] 送出 XML:\n', xml);
     return xml;
+}
+
+// ★ ASCII 純文字測試列印（診斷用）
+// 如果這能印出來但中文不能，代表印表機缺少中文字型或需設定 UTF-8 模式
+function buildTestXML() {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<root>
+  <initialization/>
+  <alignment position='left'/>
+  <text>===== PRINT TEST =====\n</text>
+  <text>Date: ${new Date().toLocaleString('zh-TW')}\n</text>
+  <text>Printer: 172.18.0.127\n</text>
+  <text>Status: OK\n</text>
+  <text>--- Chinese test ---\n</text>
+  <text>祥和年菜訂購單\n</text>
+  <text>陳東東 NT$1640\n</text>
+  <text>====================\n</text>
+  <feed line='6'/>
+  <cutpaper feed='true' type='full'/>
+</root>`;
+}
+
+async function runTestPrint() {
+    const xml = buildTestXML();
+    console.log('[測試列印] XML:', xml);
+    try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 8000);
+        const resp = await fetch(PRINTER_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/xml; charset=UTF-8' },
+            body: xml,
+            signal: ctrl.signal,
+            targetAddressSpace: 'private'
+        });
+        clearTimeout(timer);
+        const txt = await resp.text();
+        console.log('[測試列印] 回應:', txt);
+        const ok = /<success>\s*true\s*<\/success>/i.test(txt) ||
+                   /&lt;success&gt;\s*true\s*&lt;\/success&gt;/i.test(txt);
+        alert(ok ? '✅ 測試列印指令已送出！\n\n請看印表機是否出紙。\n如果出紙但沒文字：印表機需設定 UTF-8 模式\n如果完全沒反應：請檢查紙卷' : '❌ 測試失敗：' + txt.substring(0, 200));
+    } catch(e) {
+        console.error('[測試列印] 錯誤:', e);
+        alert('❌ 連線失敗：' + e.message + '\n\n請確認已在 Chrome 信任 https://172.18.0.127 的憑證');
+    }
 }
 
 /**
