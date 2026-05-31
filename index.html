@@ -1461,11 +1461,15 @@ async function printOrderViaLAN(order) {
         const xml = buildStarPrintXML(order);
         const ctrl = new AbortController();
         const timer = setTimeout(()=>ctrl.abort(), PRINTER_TIMEOUT_MS);
+        // 【內網列印關鍵】Chrome 從 2024 年起會擋公網→內網的 fetch(防 CSRF)
+        // 加上 targetAddressSpace: 'private' 告訴 Chrome「我知道我在打內網,請放行」
+        // 參考:https://developer.chrome.com/blog/local-network-access
         const resp = await fetch(PRINTER_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'text/xml; charset=UTF-8' },
             body: xml,
-            signal: ctrl.signal
+            signal: ctrl.signal,
+            targetAddressSpace: 'private'  // 允許打到 172.18.0.127 這類內網位址
         });
         clearTimeout(timer);
         const respText = await resp.text();
@@ -1473,15 +1477,16 @@ async function printOrderViaLAN(order) {
         if (/<success>\s*true\s*<\/success>/i.test(respText)) {
             return { ok: true, msg: '✅ 已成功列印' };
         }
-        return { ok: false, msg: '⚠️ 印表機回報失敗:' + respText.substring(0, 100) };
+        return { ok: false, msg: '⚠️ 印表機回報失敗:' + respText.substring(0, 200) };
     } catch(e) {
         if (e.name === 'AbortError') {
             return { ok: false, msg: '⏱️ 列印超時(印表機沒回應,請檢查印表機電源/網路)' };
         }
         // 常見失敗原因
         let hint = '';
-        if (/Failed to fetch|NetworkError/i.test(String(e))) {
-            hint = '\n👉 可能原因:\n  1. 設備沒連店裡 WIFI\n  2. 印表機沒開機\n  3. 此設備尚未信任印表機憑證(請先去 ' + PRINTER_URL.replace('/StarWebPRNT/SendMessage','') + ' 點「進階」→「繼續前往」)';
+        const eStr = String(e);
+        if (/Failed to fetch|NetworkError|blocked/i.test(eStr)) {
+            hint = '\n👉 可能原因:\n  1. 瀏覽器擋住內網存取(請至 chrome://flags 搜尋「private network」並停用「Block insecure private network requests」)\n  2. 設備沒連店裡 WIFI\n  3. 印表機沒開機\n  4. 此設備尚未信任印表機憑證(請先去 ' + PRINTER_URL.replace('/StarWebPRNT/SendMessage','') + ' 點「進階」→「繼續前往」)';
         }
         return { ok: false, msg: '❌ 列印失敗:' + e.message + hint };
     }
