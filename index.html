@@ -645,7 +645,11 @@ let lastOrder = null, action = 'new', posPayMode = 'none', editPayMode = 'none';
 //  內網列印設定 — Star mC-Print3 WebPRNT
 // ══════════════════════════════════════════════════════════
 // 印表機端點(HTTPS 必須,因為頁面本身是 https)
-const PRINTER_URL = 'https://172.18.0.127/StarWebPRNT/SendMessage';
+// ★★★ 印表機 URL 設定 ★★★
+// HTTPS 版本(印表機原廠預設): 需先在 Chrome 信任自簽憑證
+const PRINTER_URL = 'http://172.18.0.127/StarWebPRNT/SendMessage';
+// 若頁面本身是 HTTPS，請改回上面為 https:// (否則 Mixed Content 會被擋)
+// const PRINTER_URL = 'https://172.18.0.127/StarWebPRNT/SendMessage';
 const PRINTER_TIMEOUT_MS = 8000;
 let isPosMode = false, isEditMode = false;
 let currentEditOrder = null;
@@ -1445,7 +1449,7 @@ function setBtnState(id,txt,disabled){const b=document.getElementById(id);b.inne
 // ══════════════════════════════════════════════════════════════════
 //  Star mC-Print3 內網列印功能
 //   - 透過 https://172.18.0.127/StarWebPRNT/SendMessage
-//   - 用 Star WebPRNT XML 格式,中文用 codepage='utf8'(印表機內建支援)
+//   - 用 Star WebPRNT XML 格式，<text> 不帶 codepage/international 屬性(UTF-8 中文需如此)
 //   - iPad/手機必須先信任印表機的自簽憑證(設定一次即可)
 // ══════════════════════════════════════════════════════════════════
 
@@ -1473,16 +1477,17 @@ async function printOrderViaLAN(order) {
         });
         clearTimeout(timer);
         const respText = await resp.text();
-        // Star mC-Print3 實際回傳格式：Response 內容為 HTML 實體編碼
-        // &lt;root&gt;&lt;success&gt;true&lt;/success&gt;...
-        // 需同時判斷兩種格式
+        console.log('[列印] 印表機原始回應:', respText.substring(0, 300));
+        // ★ Star mC-Print3 實際回傳格式：<Response> 內為 HTML 實體編碼
+        //   &lt;root&gt;&lt;success&gt;true&lt;/success&gt;&lt;code&gt;0&lt;/code&gt;
+        //   需同時判斷兩種格式
         const isSuccess =
             /<success>\s*true\s*<\/success>/i.test(respText) ||
             /&lt;success&gt;\s*true\s*&lt;\/success&gt;/i.test(respText);
         if (isSuccess) {
             return { ok: true, msg: '✅ 已成功列印' };
         }
-        return { ok: false, msg: '⚠️ 印表機回報失敗:' + respText.substring(0, 200) };
+        return { ok: false, msg: '⚠️ 印表機回報失敗:\n' + respText.substring(0, 200) };
     } catch(e) {
         if (e.name === 'AbortError') {
             return { ok: false, msg: '⏱️ 列印超時(印表機沒回應,請檢查印表機電源/網路)' };
@@ -1490,10 +1495,18 @@ async function printOrderViaLAN(order) {
         // 常見失敗原因
         let hint = '';
         const eStr = String(e);
-        if (/Failed to fetch|NetworkError|blocked/i.test(eStr)) {
-            hint = '\n👉 可能原因:\n  1. 瀏覽器擋住內網存取(請至 chrome://flags 搜尋「private network」並停用「Block insecure private network requests」)\n  2. 設備沒連店裡 WIFI\n  3. 印表機沒開機\n  4. 此設備尚未信任印表機憑證(請先去 ' + PRINTER_URL.replace('/StarWebPRNT/SendMessage','') + ' 點「進階」→「繼續前往」)';
+        console.error('[列印] fetch 錯誤:', eStr, e);
+        if (/Failed to fetch|NetworkError|blocked|CORS|cross|Load failed/i.test(eStr)) {
+            hint = '\n\n👉 解決步驟：\n\n' +
+                   '【步驟1】在 Chrome 網址列輸入：\n' +
+                   'chrome://flags/#block-insecure-private-network-requests\n' +
+                   '→ 找到該項目改為「Disabled」→ 重新啟動 Chrome\n\n' +
+                   '【步驟2】確認印表機憑證已信任：\n' +
+                   '用 Chrome 開啟 http://172.18.0.127\n' +
+                   '確認能進入印表機管理介面\n\n' +
+                   '【步驟3】確認設備連接的是店內 WIFI';
         }
-        return { ok: false, msg: '❌ 列印失敗:' + e.message + hint };
+        return { ok: false, msg: '❌ 列印失敗：' + e.message + hint };
     }
 }
 
@@ -1524,12 +1537,14 @@ function buildStarPrintXML(order) {
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
-        // ★ 修正：Star WebPRNT 中文 UTF-8 文字只需 <text>，
-        //   加上 codepage/international 屬性反而讓印表機無法識別中文而靜默不印
+        // ★ 修正：移除 codepage='utf8' international='usa'
+        //   這兩屬性是給西歐單位元組字碼頁用的
+        //   加上後印表機用 USA 字元集解析 → 無法識別中文 → 靜默不印
+        //   Star mC-Print3 + UTF-8 中文：直接用 <text> 不帶屬性即可
         return `  <text>${safe}\n</text>`;
     }).join('\n');
 
-    return `<?xml version="1.0" encoding="UTF-8"?>
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <root>
   <initialization/>
   <alignment position='left'/>
@@ -1537,6 +1552,8 @@ ${xmlBody}
   <feed line='3'/>
   <cutpaper feed='true' type='partial'/>
 </root>`;
+    console.log('[列印] 送出 XML:\n', xml);
+    return xml;
 }
 
 /**
