@@ -1032,13 +1032,9 @@ function submitPosOrder() {
         items: qty.slice(),  // 拷貝一份
         spiceNote
     };
-    printOrderViaLAN(printOrder).then(result => {
-        if (!result.ok) {
-            // 列印失敗只警告,不影響訂單已建立的事實
-            console.warn('POS 列印單據失敗:', result.msg);
-            alert('訂單已建立,但列印失敗:\n' + result.msg + '\n\n您可至「訂單管理」中找到此訂單後重新列印。');
-        }
-    });
+    // v17:訂單建立後 GAS 後端已自動加入 CloudPRNT 佇列，印表機 30-60 秒內自動列印
+    // LAN 直連在 iPad Safari 無法使用，不再嘗試（避免彈出無意義的失敗 alert）
+    console.log('[POS] 訂單已送出，CloudPRNT 將自動列印，orderId 由後端產生。');
 
     closeModal('posModal');
     resetPosForm();
@@ -1742,29 +1738,37 @@ async function handlePrintOrder(orderJson) {
         alert('訂單資料解析失敗:' + e);
         return;
     }
-    // 收集所有「列印」按鈕並 disable(避免重複點)
     const btn = document.querySelector(`button[data-print-btn="${order.orderId}"]`);
     if (btn) {
         btn.disabled = true;
-        btn.innerText = '⏳ 列印中...';
+        btn.innerText = '⏳ 加入佇列...';
     }
-    const result = await printOrderViaLAN(order);
-    if (btn) { btn.disabled = false; btn.innerText = '🖨️ 列印'; }
-    if (result.ok) {
-        // 簡單成功提示(不打斷流程)
-        if (btn) {
-            const oldText = btn.innerText;
-            btn.innerText = '✅ 已印';
-            btn.style.background = '#4caf50';
-            btn.style.color = '#fff';
-            setTimeout(()=>{
-                btn.innerText = oldText;
-                btn.style.background = '';
-                btn.style.color = '';
-            }, 2000);
+    try {
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 15000);
+        const res  = await fetch(GAS_URL + '?posReprint=' + encodeURIComponent(order.orderId) + '&_=' + Date.now(), {signal: controller.signal});
+        clearTimeout(tid);
+        const data = await res.json();
+        if (btn) { btn.disabled = false; btn.innerText = '🖨️ 列印'; }
+        if (data.ok) {
+            if (btn) {
+                btn.innerText = '✅ 已排入佇列';
+                btn.style.background = '#4caf50';
+                btn.style.color = '#fff';
+                setTimeout(() => {
+                    btn.innerText = '🖨️ 列印';
+                    btn.style.background = '';
+                    btn.style.color = '';
+                }, 3000);
+            }
+        } else {
+            alert('⚠️ 列印失敗：' + (data.message || '未知錯誤'));
         }
-    } else {
-        alert(result.msg);
+    } catch(e) {
+        if (btn) { btn.disabled = false; btn.innerText = '🖨️ 列印'; }
+        console.error('[handlePrintOrder]', e);
+        const msg = e.name === 'AbortError' ? '請求逾時' : e.message;
+        alert('❌ 列印請求失敗：' + msg);
     }
 }
 
