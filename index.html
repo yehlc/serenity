@@ -1066,8 +1066,15 @@ async function loadAllOrders() {
         let data;
         try { data = JSON.parse(text); }
         catch(pe) {
-            console.error('[posListAll] 非 JSON 回應 (前200字):', text.substring(0,200));
-            throw new Error('GAS 回傳非 JSON，請確認部署設定（詳見 console）');
+            console.error('[posListAll] 非 JSON 回應 (前500字):', text.substring(0,500));
+            throw new Error('連線異常（非 JSON 回應，詳見 console）');
+        }
+        // Worker 把上游錯誤包成 {ok:false, error, message, raw_preview...}
+        if (data.ok === false || data.error === 'gas_non_json_response' || data.error === 'proxy_fetch_error') {
+            console.error('[posListAll] Worker 回報錯誤:', data);
+            if (data.raw_preview) console.error('[posListAll] GAS 原始回應前 500 字:', data.raw_preview);
+            if (data.upstream_url) console.error('[posListAll] 上游 URL:', data.upstream_url);
+            throw new Error((data.message || 'GAS 異常') + '（詳見 console）');
         }
         if (data.error) {
             console.error('[posListAll] GAS 回傳錯誤:', data.error);
