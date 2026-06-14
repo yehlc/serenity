@@ -562,6 +562,9 @@ select.date-locked {
 //  全域常數 & 狀態
 // ══════════════════════════════════════════════════════════
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwTvdtUxlhr93QGa8Bzghpr2CCbKKb1pcm90Yb05iPqJhJ2kIAMTcROqxsjv-4j-tAb/exec';
+// 透過 Cloudflare Worker 代理 GET 請求 → 解決 GitHub Pages CORS / Failed to fetch
+// POST 仍直接打 GAS（no-cors 模式不需要回應）
+const WORKER_API_URL = 'https://serenity-cloudprnt.yehlc.workers.dev/?api=1&';
 const POS_CLIENT_VERSION = 'POS_CLIENT_2026_05_22_01';
 
 function postGasFireAndForget(payload) {
@@ -589,7 +592,7 @@ function postGasFireAndForget(payload) {
 }
 
 function checkGasDeployment() {
-    fetch(GAS_URL + '?diag=1&from=pos&v=' + encodeURIComponent(POS_CLIENT_VERSION) + '&_=' + Date.now(), {credentials: 'omit'})
+    fetch(WORKER_API_URL + 'diag=1&from=pos&v=' + encodeURIComponent(POS_CLIENT_VERSION) + '&_=' + Date.now())
         .then(r => r.json())
         .then(info => console.log('GAS diag OK:', info))
         .catch(err => console.warn('GAS diag failed. Check GAS_URL/deployment.', err));
@@ -749,7 +752,7 @@ function checkDateConstraints(selectedDate) {
 
 function loadWithHistory() {
     const profile = liff.getDecodedIDToken();
-    fetch(GAS_URL + '?userId=' + profile.sub, {credentials: 'omit'})
+    fetch(WORKER_API_URL + 'userId=' + profile.sub)
         .then(r => r.json())
         .then(res => {
             if (res.lastOrder) {
@@ -1057,7 +1060,7 @@ async function loadAllOrders() {
     try {
         const controller = new AbortController();
         const tid = setTimeout(() => controller.abort(), 15000);
-        const res  = await fetch(GAS_URL + '?posListAll=1&_=' + Date.now(), {signal: controller.signal, credentials: 'omit'});
+        const res  = await fetch(WORKER_API_URL + 'posListAll=1&_=' + Date.now(), {signal: controller.signal});
         clearTimeout(tid);
         const text = await res.text();
         let data;
@@ -1746,7 +1749,7 @@ async function handlePrintOrder(orderJson) {
     try {
         const controller = new AbortController();
         const tid = setTimeout(() => controller.abort(), 15000);
-        const res  = await fetch(GAS_URL + '?posReprint=' + encodeURIComponent(order.orderId) + '&_=' + Date.now(), {signal: controller.signal, credentials: 'omit'});
+        const res  = await fetch(WORKER_API_URL + 'posReprint=' + encodeURIComponent(order.orderId) + '&_=' + Date.now(), {signal: controller.signal});
         clearTimeout(tid);
         const data = await res.json();
         if (btn) { btn.disabled = false; btn.innerText = '🖨️ 列印'; }
