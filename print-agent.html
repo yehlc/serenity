@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>祥和蔬食 🖨️ 列印代理</title>
+<style>
+  :root {
+    --bg:       #0d1117;
+    --surface:  #161b22;
+    --border:   #30363d;
+    --green:    #3fb950;
+    --green-dim:#1a4a2a;
+    --amber:    #d29922;
+    --amber-dim:#3a2f10;
+    --red:      #f85149;
+    --red-dim:  #3a1c1c;
+    --blue:     #58a6ff;
+    --text:     #c9d1d9;
+    --text-dim: #8b949e;
+    --mono:     'JetBrains Mono', 'Cascadia Code', 'Courier New', monospace;
+    --sans:     -apple-system, 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 24px;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .brand { font-size: 1.1rem; font-weight: 600; color: var(--text); }
+  .brand span { color: var(--text-dim); font-weight: 400; }
+
+  /* ── Status pill ── */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 99px;
+    font-size: .85rem;
+    font-weight: 600;
+    border: 1px solid;
+    transition: all .3s;
+  }
+  .pill.running { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+  .pill.stopped { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+  .pill.waiting { background: var(--amber-dim); border-color: var(--amber); color: var(--amber); }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .dot.pulse { animation: pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.35 } }
+
+  /* ── Grid ── */
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 20px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 20px;
+  }
+  .card-label { font-size: .75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+  .card-value { font-size: 1.65rem; font-weight: 700; font-family: var(--mono); color: var(--blue); }
+  .card-value.green { color: var(--green); }
+  .card-value.red   { color: var(--red); }
+  .card-sub  { font-size: .78rem; color: var(--text-dim); margin-top: 4px; }
+
+  /* ── Controls ── */
+  .controls { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+
+  button {
+    padding: 9px 20px;
+    border-radius: 6px;
+    border: 1px solid;
+    font-family: var(--sans);
+    font-size: .9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity .15s;
+  }
+  button:active { opacity: .75; }
+  .btn-start { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+  .btn-stop  { background: var(--red-dim);   border-color: var(--red);   color: var(--red); }
+  .btn-test  { background: var(--amber-dim); border-color: var(--amber); color: var(--amber); }
+  .btn-clear { background: transparent;      border-color: var(--border); color: var(--text-dim); }
+
+  .countdown {
+    font-size: .85rem;
+    color: var(--text-dim);
+    font-family: var(--mono);
+  }
+
+  /* ── Settings panel ── */
+  details {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+  summary {
+    padding: 14px 18px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: .9rem;
+    color: var(--text-dim);
+    user-select: none;
+    list-style: none;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: '▶  '; font-size: .7rem; }
+  details[open] summary::before { content: '▼  '; }
+  .settings-body { padding: 16px 18px; border-top: 1px solid var(--border); display: grid; gap: 12px; }
+  .field label { display: block; font-size: .75rem; color: var(--text-dim); margin-bottom: 5px; }
+  .field input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: .85rem;
+    padding: 8px 12px;
+  }
+  .field input:focus { outline: 2px solid var(--blue); outline-offset: -1px; border-color: transparent; }
+
+  /* ── Log ── */
+  .log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .log-title { font-weight: 600; font-size: .9rem; }
+  #log {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-family: var(--mono);
+    font-size: .8rem;
+    min-height: 200px;
+    max-height: 380px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  #log::-webkit-scrollbar { width: 6px; }
+  #log::-webkit-scrollbar-track { background: transparent; }
+  #log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .entry { display: flex; gap: 10px; line-height: 1.5; }
+  .ts    { color: var(--text-dim); flex-shrink: 0; }
+  .msg-ok   { color: var(--green); }
+  .msg-err  { color: var(--red); }
+  .msg-warn { color: var(--amber); }
+  .msg-info { color: var(--text); }
+  .msg-dim  { color: var(--text-dim); }
+
+  /* ── Alert banner ── */
+  #alert-banner {
+    display: none;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: .88rem;
+    font-weight: 600;
+    border: 1px solid;
+  }
+  #alert-banner.warn { background: var(--amber-dim); border-color: var(--amber); color: var(--amber); }
+  #alert-banner.err  { background: var(--red-dim);   border-color: var(--red);   color: var(--red); }
+
+  /* ── Responsive ── */
+  @media (max-width: 500px) {
+    body { padding: 16px; }
+    .card-value { font-size: 1.3rem; }
+    header { flex-direction: column; gap: 10px; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">祥和蔬食 <span>列印代理 v1.0</span></div>
+  <div class="pill stopped" id="status-pill">
+    <span class="dot" id="status-dot"></span>
+    <span id="status-text">已停止</span>
+  </div>
+</header>
+
+<div id="alert-banner"></div>
+
+<div class="grid">
+  <div class="card">
+    <div class="card-label">本次已列印</div>
+    <div class="card-value green" id="cnt-ok">0</div>
+    <div class="card-sub">張訂單</div>
+  </div>
+  <div class="card">
+    <div class="card-label">列印失敗</div>
+    <div class="card-value red" id="cnt-fail">0</div>
+    <div class="card-sub">張（請查看 log）</div>
+  </div>
+  <div class="card">
+    <div class="card-label">上次列印</div>
+    <div class="card-value" style="font-size:1rem;padding-top:4px" id="last-print">—</div>
+    <div class="card-sub" id="last-token">—</div>
+  </div>
+  <div class="card">
+    <div class="card-label">下次輪詢</div>
+    <div class="card-value" style="font-size:1.2rem;padding-top:4px" id="next-poll">—</div>
+    <div class="card-sub">秒後</div>
+  </div>
+</div>
+
+<div class="controls">
+  <button class="btn-start" id="btn-start" onclick="startAgent()">▶ 啟動代理</button>
+  <button class="btn-stop"  id="btn-stop"  onclick="stopAgent()" style="display:none">⏹ 停止</button>
+  <button class="btn-test"  onclick="testPrint()">🔧 測試列印</button>
+  <button class="btn-clear" onclick="clearLog()">清除 Log</button>
+  <span class="countdown" id="countdown"></span>
+</div>
+
+<details>
+  <summary>⚙️ 設定</summary>
+  <div class="settings-body">
+    <div class="field">
+      <label>Cloudflare Worker URL（用於 CORS 代理到 GAS）</label>
+      <input id="cfg-worker" type="text"
+        value="https://serenity-cloudprnt-test.yehlc.workers.dev">
+    </div>
+    <div class="field">
+      <label>印表機 StarWebPRNT URL（店內區網 IP）</label>
+      <input id="cfg-printer" type="text"
+        value="http://192.168.100.12/StarWebPRNT/SendMessage">
+    </div>
+    <div class="field">
+      <label>輪詢間隔（秒）</label>
+      <input id="cfg-interval" type="number" value="15" min="5" max="120">
+    </div>
+    <div class="field">
+      <label>列印超時（秒）</label>
+      <input id="cfg-timeout" type="number" value="8" min="3" max="30">
+    </div>
+  </div>
+</details>
+
+<div class="log-header">
+  <div class="log-title">📋 執行記錄</div>
+</div>
+<div id="log"></div>
+
+<script>
+'use strict';
+
+// ══════════════════════════════════════════════════════
+//  State
+// ══════════════════════════════════════════════════════
+let running = false;
+let timer   = null;
+let countdown = 0;
+let cntOk   = 0;
+let cntFail = 0;
+
+// ══════════════════════════════════════════════════════
+//  Config helpers
+// ══════════════════════════════════════════════════════
+const cfg = {
+  worker()   { return document.getElementById('cfg-worker').value.trim().replace(/\/$/, ''); },
+  printer()  { return document.getElementById('cfg-printer').value.trim(); },
+  interval() { return parseInt(document.getElementById('cfg-interval').value) || 15; },
+  timeout()  { return parseInt(document.getElementById('cfg-timeout').value) * 1000 || 8000; }
+};
+
+// ══════════════════════════════════════════════════════
+//  Logging
+// ══════════════════════════════════════════════════════
+function log(msg, type = 'info') {
+  const now = new Date().toLocaleTimeString('zh-TW', { hour12: false });
+  const el = document.createElement('div');
+  el.className = 'entry';
+  el.innerHTML = `<span class="ts">${now}</span><span class="msg-${type}">${escHtml(msg)}</span>`;
+  const box = document.getElementById('log');
+  box.appendChild(el);
+  // Keep only last 150 entries
+  while (box.children.length > 150) box.removeChild(box.firstChild);
+  box.scrollTop = box.scrollHeight;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function clearLog() { document.getElementById('log').innerHTML = ''; }
+
+// ══════════════════════════════════════════════════════
+//  Status UI helpers
+// ══════════════════════════════════════════════════════
+function setStatus(state, text) {
+  const pill = document.getElementById('status-pill');
+  const dot  = document.getElementById('status-dot');
+  const txt  = document.getElementById('status-text');
+  pill.className = `pill ${state}`;
+  dot.className  = `dot${state === 'running' ? ' pulse' : ''}`;
+  txt.textContent = text;
+}
+
+function showAlert(msg, type = 'warn') {
+  const b = document.getElementById('alert-banner');
+  b.textContent = msg;
+  b.className = type;
+  b.style.display = 'block';
+}
+
+function hideAlert() {
+  document.getElementById('alert-banner').style.display = 'none';
+}
+
+// ══════════════════════════════════════════════════════
+//  CloudPRNT queue via Worker API proxy
+// ══════════════════════════════════════════════════════
+async function pollGAS() {
+  const url = `${cfg.worker()}/?api=1&cprnt=poll`;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 25000);
+  const r = await fetch(url, { signal: ctrl.signal });
+  clearTimeout(t);
+  return r.json();
+}
+
+async function fetchContent(token) {
+  const url = `${cfg.worker()}/?api=1&cprnt=fetch&token=${encodeURIComponent(token)}`;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 25000);
+  const r = await fetch(url, { signal: ctrl.signal });
+  clearTimeout(t);
+  return r.text();
+}
+
+async function deleteJob(token) {
+  const url = `${cfg.worker()}/?api=1&cprnt=delete&token=${encodeURIComponent(token)}`;
+  await fetch(url).catch(() => {});
+}
+
+// ══════════════════════════════════════════════════════
+//  Star WebPRNT
+// ══════════════════════════════════════════════════════
+function textToStarXML(plainText) {
+  const lines = plainText.split('\n');
+  const body = lines.map(line => {
+    const safe = line
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    return `  <text>${safe}\n</text>`;
+  }).join('\n');
+
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<root>',
+    '  <initialization/>',
+    '  <alignment position="left"/>',
+    body,
+    '  <feed line="3"/>',
+    '  <cutpaper feed="true" type="partial"/>',
+    '</root>'
+  ].join('\n');
+}
+
+async function sendToPrinter(xml) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), cfg.timeout());
+  try {
+    const r = await fetch(cfg.printer(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/xml; charset=UTF-8' },
+      body: xml,
+      signal: ctrl.signal,
+      // Chrome Private Network Access (allows HTTPS page → local device)
+      targetAddressSpace: 'private'
+    });
+    clearTimeout(t);
+    const txt = await r.text();
+    // StarWebPRNT success response contains <success>true</success>
+    const ok = /<success>\s*true\s*<\/success>/i.test(txt) ||
+               /&lt;success&gt;\s*true\s*&lt;\/success&gt;/i.test(txt);
+    return { ok, raw: txt.substring(0, 200) };
+  } catch (e) {
+    clearTimeout(t);
+    const msg = e.name === 'AbortError' ? '列印超時' : e.message;
+    return { ok: false, raw: msg };
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  Main loop
+// ══════════════════════════════════════════════════════
+async function tick() {
+  if (!running) return;
+
+  try {
+    log('輪詢 GAS 佇列...', 'dim');
+    const data = await pollGAS();
+
+    if (data.error) {
+      log(`GAS 回傳錯誤：${data.error}`, 'err');
+      scheduleNext();
+      return;
+    }
+
+    if (!data.jobReady) {
+      log('無待印工作', 'dim');
+      scheduleNext();
+      return;
+    }
+
+    const token = String(data.jobToken);
+    log(`找到工作 #${token}，開始列印...`, 'warn');
+
+    // Fetch content
+    const content = await fetchContent(token);
+    if (!content || !content.trim()) {
+      log(`#${token}：GAS 回傳空內容`, 'err');
+      cntFail++;
+      updateCounters();
+      scheduleNext();
+      return;
+    }
+
+    // Print
+    const xml = textToStarXML(content);
+    const result = await sendToPrinter(xml);
+
+    if (result.ok) {
+      log(`✅ #${token} 列印成功`, 'ok');
+      await deleteJob(token);
+      cntOk++;
+      document.getElementById('last-print').textContent = new Date().toLocaleTimeString('zh-TW', { hour12: false });
+      document.getElementById('last-token').textContent = `訂單 #${token}`;
+    } else {
+      log(`❌ #${token} 列印失敗：${result.raw}`, 'err');
+      showAlert(`❌ 印表機回報失敗，請確認 (1) 同網段 (2) 已信任憑證 (3) 印表機開機`, 'err');
+      cntFail++;
+    }
+    updateCounters();
+  } catch (e) {
+    log(`連線錯誤：${e.message}`, 'err');
+  }
+
+  scheduleNext();
+}
+
+function scheduleNext() {
+  if (!running) return;
+  countdown = cfg.interval();
+  document.getElementById('next-poll').textContent = countdown;
+  const iv = setInterval(() => {
+    if (!running) { clearInterval(iv); return; }
+    countdown--;
+    document.getElementById('next-poll').textContent = Math.max(0, countdown);
+    if (countdown <= 0) { clearInterval(iv); tick(); }
+  }, 1000);
+}
+
+function updateCounters() {
+  document.getElementById('cnt-ok').textContent   = cntOk;
+  document.getElementById('cnt-fail').textContent = cntFail;
+}
+
+// ══════════════════════════════════════════════════════
+//  Public: start / stop / test
+// ══════════════════════════════════════════════════════
+function startAgent() {
+  if (running) return;
+  running = true;
+  hideAlert();
+  setStatus('running', '運行中');
+  document.getElementById('btn-start').style.display = 'none';
+  document.getElementById('btn-stop').style.display  = '';
+  log('🟢 列印代理已啟動', 'ok');
+  log(`Worker: ${cfg.worker()}`, 'dim');
+  log(`印表機: ${cfg.printer()}`, 'dim');
+  log(`輪詢間隔: ${cfg.interval()} 秒`, 'dim');
+  tick(); // first tick immediately
+}
+
+function stopAgent() {
+  running = false;
+  clearTimeout(timer);
+  setStatus('stopped', '已停止');
+  document.getElementById('btn-start').style.display = '';
+  document.getElementById('btn-stop').style.display  = 'none';
+  document.getElementById('next-poll').textContent = '—';
+  log('🔴 代理已停止', 'warn');
+}
+
+async function testPrint() {
+  log('🔧 發送測試列印...', 'warn');
+  const testContent = [
+    '         祥和蔬食測試列印',
+    '================================',
+    '',
+    '訂單編號: #TEST',
+    '訂購人  : 測試顧客',
+    '電話    : 0900-000-000',
+    '取貨門市: 鎮江店',
+    '取貨日期: 測試',
+    '付款狀態: 測試列印',
+    '--------------------------------',
+    '【訂購餐點】',
+    '  (測試模式無餐點)',
+    '--------------------------------',
+    '合計:                    NT$ 0',
+    '',
+    '  ★ 列印代理運作正常 ★'
+  ].join('\n');
+
+  const xml = textToStarXML(testContent);
+  const result = await sendToPrinter(xml);
+  if (result.ok) {
+    log('✅ 測試列印成功！印表機連線正常', 'ok');
+    hideAlert();
+  } else {
+    log(`❌ 測試列印失敗：${result.raw}`, 'err');
+    showAlert('❌ 無法連線印表機。請確認：① 此電腦與印表機在同一 WIFI ② 已在瀏覽器信任印表機憑證（開啟印表機 IP 並接受）', 'err');
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  Init
+// ══════════════════════════════════════════════════════
+window.addEventListener('load', () => {
+  log('列印代理就緒，按「啟動代理」開始', 'dim');
+  log('⚠️ 使用前請確認：① 連上店內 WIFI ② 已信任印表機憑證', 'warn');
+  // Auto-start after 2 seconds (optional, comment out if unwanted)
+  // setTimeout(startAgent, 2000);
+});
+
+// Warn before closing if running
+window.addEventListener('beforeunload', e => {
+  if (running) {
+    e.returnValue = '列印代理正在運行，確定要離開？';
+  }
+});
+</script>
+</body>
+</html>
