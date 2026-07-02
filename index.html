@@ -56,9 +56,7 @@
         .submit-btn.blue{background:#1565c0;}
         .btn-split-row{display:flex;gap:8px;margin-top:10px;}
         .btn-split-row .submit-btn{margin-top:0;font-size:1em;padding:13px 8px;}
-        .store-tabs{display:flex;gap:6px;margin:8px 0 4px;padding:0;}
-        .store-tab{flex:1;padding:7px 4px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5;color:#555;font-size:.85em;cursor:pointer;font-weight:bold;}
-        .store-tab.active{background:#1565c0;color:#fff;border-color:#1565c0;}
+
 
         .payment-section{background:#fff8e1;border:1px solid #ffd54f;border-radius:10px;padding:15px;margin-bottom:15px;}
         .payment-section h4{margin:0 0 10px;color:#e65100;font-size:1em;}
@@ -368,7 +366,7 @@ select.date-locked {
 <div class="modal-overlay" id="searchModal">
     <div class="modal-content">
         <div class="modal-header">
-            <h3>📋 訂單管理</h3>
+            <h3>📋 訂單管理<span id="branchBadge" style="margin-left:8px;font-size:.7em;padding:2px 8px;border-radius:12px;background:#e3f2fd;color:#1565c0;"></span></h3>
             <div style="display:flex;gap:8px;align-items:center;">
                 <button onclick="printAllOrders()" id="printAllBtn" style="font-size:.75em;padding:4px 10px;background:#1565c0;color:#fff;border:none;border-radius:6px;cursor:pointer;">🖨️ 列印全部訂單</button>
                 
@@ -379,11 +377,6 @@ select.date-locked {
             <label>電話末三碼篩選</label>
             <input type="tel" id="searchPhone" class="search-last3" placeholder="例：678" maxlength="3" oninput="doSearch()" autocomplete="off" inputmode="numeric">
             <div class="search-hint">輸入末三碼即時篩選，空白則顯示全部</div>
-        <div class="store-tabs" id="storeFilterTabs">
-            <button class="store-tab" id="tab-all"      onclick="setStoreFilter('')">全部訂單</button>
-            <button class="store-tab" id="tab-jinjiang" onclick="setStoreFilter('鎮江店')">🏪 鎮江店</button>
-            <button class="store-tab" id="tab-qingcheng"onclick="setStoreFilter('慶城店')">🏪 慶城店</button>
-        </div>
         </div>
         <div id="searchStatus" class="search-status"></div>
         <div id="searchResults" style="max-height:58vh;overflow-y:auto;padding-right:2px;"></div>
@@ -580,12 +573,15 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbyivJXyXT9nGG1QnnilWLIe
 // POST 仍直接打 GAS（no-cors 模式不需要回應）
 const WORKER_API_URL = 'https://serenity-cloudprnt.yehlc.workers.dev/?api=1&';
 
-// ── 門市設定：由 URL 參數 ?branch=jinjiang|qingcheng 決定 ──────────
-const _urlBranch = new URLSearchParams(location.search).get('branch') || '';
-const POS_BRANCH = _urlBranch === 'qingcheng' ? '慶城店' : '鎮江店';  // 本平板所屬門市
-let currentStoreFilter = _urlBranch === 'qingcheng' ? '慶城店'         // 預設展示門市
-                       : _urlBranch === 'jinjiang'  ? '鎮江店'
-                       : '';  // 空白 = 全部（老闆/主管用）
+// ── 門市設定：由 URL 參數 ?branch=jinjiang|qingcheng 決定 ─────────
+// ?branch=jinjiang  → 只顯示鎮江店取貨的訂單
+// ?branch=qingcheng → 只顯示慶城店取貨的訂單
+// （無參數）        → 顯示全部訂單（老闆/主管用）
+const _urlBranch      = new URLSearchParams(location.search).get('branch') || '';
+const POS_BRANCH      = _urlBranch === 'qingcheng' ? '慶城店' : '鎮江店';  // 本平板門市（建立訂單用）
+const POS_BRANCH_FILTER = _urlBranch === 'qingcheng' ? '慶城店'             // 固定篩選（不切換）
+                        : _urlBranch === 'jinjiang'  ? '鎮江店'
+                        : '';  // 空白 = 老闆全部
 const POS_CLIENT_VERSION = 'POS_CLIENT_2026_05_22_01';
 
 function postGasFireAndForget(payload) {
@@ -1077,36 +1073,15 @@ function submitPosOrder(withPrint) {
 // ══════════════════════════════════════════════════════════
 //  POS：訂單管理（搜尋 + 列表）
 // ══════════════════════════════════════════════════════════
-// ── 門市篩選標籤 ──────────────────────────────────────────────────
-function setStoreFilter(branch) {
-    currentStoreFilter = branch;
-    // Update tab active state
-    ['tab-all','tab-jinjiang','tab-qingcheng'].forEach(id => {
-        const t = document.getElementById(id);
-        if (t) t.classList.remove('active');
-    });
-    const activeId = branch === '鎮江店' ? 'tab-jinjiang'
-                   : branch === '慶城店' ? 'tab-qingcheng' : 'tab-all';
-    const activeEl = document.getElementById(activeId);
-    if (activeEl) activeEl.classList.add('active');
-
-    // Re-render with new filter
-    doSearch();
-    const label = branch || '全部';
-    const filtered = branch
-        ? allOrders.filter(o => (o.branch||'') === branch && o.status !== '隱藏' && o.status !== '已隱藏')
-        : allOrders.filter(o => o.status !== '隱藏' && o.status !== '已隱藏');
-    document.getElementById('searchStatus').innerText = `${label}：共 ${filtered.length} 筆`;
-}
-
 async function openSearchModal() {
+    // Show branch badge in modal title
+    const badge = document.getElementById('branchBadge');
+    if (badge) badge.innerText = POS_BRANCH_FILTER ? POS_BRANCH_FILTER : '全部門市';
     document.getElementById('searchPhone').value='';
     document.getElementById('searchStatus').innerText='載入訂單中...';
     document.getElementById('searchResults').innerHTML='';
     document.getElementById('searchModal').style.display='flex';
     await loadAllOrders();
-    // Init store filter tab selection from URL param
-    setStoreFilter(currentStoreFilter);
 }
 
 async function loadAllOrders() {
@@ -1134,9 +1109,14 @@ async function loadAllOrders() {
             console.error('[posListAll] GAS 回傳錯誤:', data.error);
             throw new Error('GAS 錯誤: ' + data.error);
         }
-        allOrders = data.orders || [];
+        // ★ 依門市篩選：URL ?branch=jinjiang 只載入鎮江店訂單，以此類推
+        const rawOrders = data.orders || [];
+        allOrders = POS_BRANCH_FILTER
+            ? rawOrders.filter(o => (o.branch || '') === POS_BRANCH_FILTER)
+            : rawOrders;
         renderOrderList(allOrders);
-        document.getElementById('searchStatus').innerText = `共 ${allOrders.length} 筆訂單`;
+        const storeLabel = POS_BRANCH_FILTER ? POS_BRANCH_FILTER : '全部';
+        document.getElementById('searchStatus').innerText = `${storeLabel}：共 ${allOrders.length} 筆訂單`;
     } catch(e) {
         console.error('[posListAll] fetch 失敗:', e);
         const msg = e.name === 'AbortError' ? '逾時 15 秒' : (e.message || String(e));
@@ -1148,23 +1128,20 @@ async function loadAllOrders() {
 
 function doSearch() {
     const last3 = document.getElementById('searchPhone').value.trim();
-    // Apply store filter first
-    const storeOrders = currentStoreFilter
-        ? allOrders.filter(o => (o.branch || '') === currentStoreFilter)
-        : allOrders;
+    // allOrders is already pre-filtered by branch (from loadAllOrders)
     if (!last3) {
-        renderOrderList(storeOrders);
-        const label = currentStoreFilter || '全部';
-        document.getElementById('searchStatus').innerText = `${label}：共 ${storeOrders.length} 筆訂單`;
+        renderOrderList(allOrders);
+        const storeLabel = POS_BRANCH_FILTER || '全部';
+        document.getElementById('searchStatus').innerText = `${storeLabel}：共 ${allOrders.length} 筆訂單`;
         return;
     }
-    const filtered = storeOrders.filter(o=>{
+    const filtered = allOrders.filter(o=>{
         const p = String(o.phone||'').replace(/[\s\-]/g,'');
         return p.endsWith(last3);
     });
-    const label = currentStoreFilter || '全部';
+    const storeLabel2 = POS_BRANCH_FILTER ? `[${POS_BRANCH_FILTER}] ` : '';
     document.getElementById('searchStatus').innerText =
-        filtered.length>0?`[${label}] 末三碼「${last3}」找到 ${filtered.length} 筆`:`[${label}] 末三碼「${last3}」查無結果`;
+        filtered.length>0?`${storeLabel2}末三碼「${last3}」找到 ${filtered.length} 筆`:`${storeLabel2}末三碼「${last3}」查無結果`;
     renderOrderList(filtered);
 }
 
@@ -1658,16 +1635,13 @@ async function printAllOrders() {
     const btn      = document.getElementById('printAllBtn');
     const statusEl = document.getElementById('searchStatus');
 
-    // 依目前門市篩選過濾可列印訂單
-    let printable = allOrders.filter(o =>
+    // allOrders 已按門市預先篩選，直接過濾狀態即可
+    const printable = allOrders.filter(o =>
         o.status !== '隱藏' && o.status !== '已隱藏' && o.status !== '已取消'
     );
-    if (currentStoreFilter) {
-        printable = printable.filter(o => (o.branch || '') === currentStoreFilter);
-    }
 
-    if (printable.length === 0) { alert('目前篩選條件下沒有可列印的訂單'); return; }
-    const label = currentStoreFilter || '全部';
+    if (printable.length === 0) { alert('沒有可列印的訂單'); return; }
+    const label = POS_BRANCH_FILTER || '全部';
     if (!confirm(`確定要列印「${label}」訂單，共 ${printable.length} 筆？\n所有佇列將同時送出（約 3 秒完成），印表機陸續印出。`)) return;
 
     btn.disabled = true;
