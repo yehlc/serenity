@@ -365,6 +365,7 @@ select.date-locked {
         <div class="modal-header">
             <h3>📋 訂單管理</h3>
             <div style="display:flex;gap:8px;align-items:center;">
+                <button onclick="printAllOrders()" id="printAllBtn" style="font-size:.75em;padding:4px 10px;background:#1565c0;color:#fff;border:none;border-radius:6px;cursor:pointer;">🖨️ 列印全部訂單</button>
                 <button onclick="runTestPrint()" style="font-size:.75em;padding:4px 10px;background:#e65100;color:#fff;border:none;border-radius:6px;cursor:pointer;">🖨️ 印表機測試</button>
                 <button class="close-btn" onclick="closeModal('searchModal')">×</button>
             </div>
@@ -1480,114 +1481,13 @@ function setBtnState(id,txt,disabled){const b=document.getElementById(id);b.inne
 //   - iPad/手機必須先信任印表機的自簽憑證(設定一次即可)
 // ══════════════════════════════════════════════════════════════════
 
-/**
- * 主入口:把訂單資料組合成 Star XML 並 POST 給印表機
- * @param {Object} order 訂單資料(從 POS 訂單管理列表來,或直接從 POS 表單拼湊)
- *                       格式:{ orderId, name, phone, date, time, total, status,
- *                              deposit, paid, items[22], spiceNote, branch }
- * @returns {Promise<{ok:bool, msg:string}>}
- */
-async function printOrderViaLAN(order) {
-    try {
-        const xml = buildStarPrintXML(order);
-        const ctrl = new AbortController();
-        const timer = setTimeout(()=>ctrl.abort(), PRINTER_TIMEOUT_MS);
-        // 【內網列印關鍵】Chrome 從 2024 年起會擋公網→內網的 fetch(防 CSRF)
-        // 加上 targetAddressSpace: 'private' 告訴 Chrome「我知道我在打內網,請放行」
-        // 參考:https://developer.chrome.com/blog/local-network-access
-        const resp = await fetch(PRINTER_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/xml; charset=UTF-8' },
-            body: xml,
-            signal: ctrl.signal,
-            targetAddressSpace: 'private'  // 允許打到 172.18.0.127 這類內網位址
-        });
-        clearTimeout(timer);
-        const respText = await resp.text();
-        console.log('[列印] 回應:', respText.substring(0, 500));
-        const isSuccess =
-            /<success>\s*true\s*<\/success>/i.test(respText) ||
-            /&lt;success&gt;\s*true\s*&lt;\/success&gt;/i.test(respText);
-        const st = decodeStarStatus(respText);
 
-        // 上蓋未關 → 一定失敗
-        if (st.coverOpen) return { ok: false, msg: '❌ 上蓋未關閉，請蓋好後重試。' };
-
-        // ★ 印表機真正離線（byte0 bit5=0）才算失敗
-        if (st.trulyOffline) return { ok: false, msg: '❌ 印表機離線，請確認電源和連線。' };
-
-        // success=true → 信任印表機，即使 NE bit 還在也算成功
-        // NE bit 只是物理感測器狀態回報，停用後不影響列印
-        if (isSuccess) return { ok: true, msg: '✅ 已成功列印' };
-
-        return { ok: false, msg: '⚠️ 印表機拒絕指令:\n' + respText.substring(0, 200) };
-    } catch(e) {
-        if (e.name === 'AbortError') {
-            return { ok: false, msg: '⏱️ 列印超時(印表機沒回應,請檢查印表機電源/網路)' };
-        }
-        // 常見失敗原因
-        let hint = '';
-        const eStr = String(e);
-        console.error('[列印] 連線錯誤:', String(e));
-        if (/Failed to fetch|NetworkError|blocked|CORS|Load failed/i.test(eStr)) {
-            hint = '\n\n請確認：\n① 印表機已開機\n' +
-                   '② Chrome 已信任 https://172.18.0.127 憑證\n' +
-                   '③ chrome://flags/#private-network-access-send-preflights → Disabled';
-        }
-        return { ok: false, msg: '❌ 列印失敗:' + e.message + hint };
-    }
-}
 
 /**
- * 組合 Star WebPRNT XML 字串
- * 單據版型(80mm 紙寬,印表機字寬 48 半形/24 全形):
- *
- *           祥和年菜訂購單
- * ============================================
- * 訂單編號: #002
- * 訂購人  : 張安安
- * 電話    : 0917604732
- * 取貨門市: 鎮江店
- * 取貨日期: 2027/02/04 12:00
- * 付款狀態: 付清
- * --------------------------------------------
- * 【訂購餐點】
- * 祥和拼盤/奶蛋素                       x1
- * ...
- * --------------------------------------------
- * 合計:                          NT$ 2760
- */
-function buildStarPrintXML(order) {
-    const lines = buildOrderTextLines(order);
-    const xmlBody = lines.map(line => {
-        // 處理 XML 特殊字元
-        const safe = String(line)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
-        return `  <text>${safe}\n</text>`;
-    }).join('\n');
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<root>
-  <initialization/>
-  <alignment position='left'/>
-${xmlBody}
-  <feed line='6'/>
-  <cutpaper feed='true' type='full'/>
-</root>`;
-    console.log('[列印] XML:', xml);
-    return xml;
-}
-
-/**
- * ★ 正確的 Star ASB 狀態解析
- *
- * 判斷邏輯（優先序）：
+ * 解碼 Star 印表機狀態 hex
  * 1. 上蓋開啟 (byte1 bit2) → 一定無法列印
  * 2. 真正離線 (byte0 bit5=0) → 無法列印
  * 3. 其餘（含 NE bit）→ 只是感測器物理狀態，不代表列印失敗
- *    - NE Detect 已停用後，NE bit 可能仍為 1 但不影響列印
- *    - 以 success=true 為最終判斷依據
  */
 function decodeStarStatus(respText) {
     const r = { trulyOffline: false, coverOpen: false, nearEnd: false, msg: '' };
@@ -1597,14 +1497,12 @@ function decodeStarStatus(respText) {
     const hex = m[1];
     const by = (i) => parseInt(hex.slice(i*2, i*2+2) || '0', 16);
     const b0 = by(0), b1 = by(1);
-
-    r.coverOpen    = Boolean((b1 >> 2) & 1);   // byte1 bit2 = Cover open
-    r.trulyOffline = !((b0 >> 5) & 1);          // byte0 bit5 = 0 → offline
-    r.nearEnd      = Boolean((b0 >> 3) & 1);    // byte0 bit3 = NE (物理狀態，僅參考)
-
-    if (r.coverOpen)    r.msg = '❌ 上蓋未關';
+    r.coverOpen    = Boolean((b1 >> 2) & 1);
+    r.trulyOffline = !((b0 >> 5) & 1);
+    r.nearEnd      = Boolean((b0 >> 3) & 1);
+    if (r.coverOpen)         r.msg = '❌ 上蓋未關';
     else if (r.trulyOffline) r.msg = '❌ 印表機離線';
-    else if (r.nearEnd) r.msg = '⚠️ NE 感測器物理狀態仍觸發（已停用，不影響列印）';
+    else if (r.nearEnd)      r.msg = '⚠️ NE 感測器物理狀態仍觸發（已停用，不影響列印）';
     return r;
 }
 
@@ -1649,79 +1547,6 @@ async function runTestPrint() {
  * 把訂單資料轉成「一行一行的純文字」陣列
  * 紙寬以 32 半形寬計(中文每字佔 2 半形)
  */
-function buildOrderTextLines(order) {
-    const L = [];
-    // 訂單編號補零到 3 位數
-    let oidStr = String(order.orderId || '');
-    if (/^\d+$/.test(oidStr) && oidStr.length < 3) oidStr = ('00' + oidStr).slice(-3);
-
-    // 標題(全體置中:7 中文字佔 14 半形寬,32-14=18,左邊空 9 個)
-    L.push('         祥和年菜訂購單');
-    L.push('================================');
-    L.push('');
-
-    L.push('訂單編號: #' + oidStr);
-    L.push('訂購人  : ' + (order.name || ''));
-    L.push('電話    : ' + (order.phone || ''));
-    if (order.branch) L.push('取貨門市: ' + order.branch);
-
-    // 取貨日期 + 時間 YYYY/MM/DD HH:MM
-    let dateStr = order.date || '';
-    if (dateStr instanceof Date) {
-        const y = dateStr.getFullYear();
-        const m = String(dateStr.getMonth()+1).padStart(2,'0');
-        const d = String(dateStr.getDate()).padStart(2,'0');
-        dateStr = `${y}/${m}/${d}`;
-    } else {
-        dateStr = String(dateStr).replace(/-/g, '/');
-    }
-    let timeStr = order.time || '';
-    if (timeStr instanceof Date) {
-        const h = String(timeStr.getHours()).padStart(2,'0');
-        const mi = String(timeStr.getMinutes()).padStart(2,'0');
-        timeStr = `${h}:${mi}`;
-    } else {
-        const tm = String(timeStr).match(/(\d{1,2}):(\d{2})/);
-        if (tm) timeStr = tm[1].padStart(2,'0') + ':' + tm[2];
-    }
-    L.push('取貨日期: ' + dateStr + (timeStr ? ' ' + timeStr : ''));
-
-    // 付款狀態 + 訂金
-    let payInfo = order.status || '未付';
-    const dep = Number(order.deposit) || 0;
-    const paid = Number(order.paid) || 0;
-    const total = Number(order.total) || 0;
-    if (dep > 0 && payInfo !== '付清') {
-        payInfo += ' (訂金:NT$' + dep + ')';
-    } else if (paid > 0 && paid < total) {
-        payInfo += ' (已付:NT$' + paid + ')';
-    }
-    L.push('付款狀態: ' + payInfo);
-    L.push('--------------------------------');
-    L.push('【訂購餐點】');
-
-    // 餐點:items 陣列長度與 menuItems 對齊(22 個)
-    const items = order.items || [];
-    let hasItem = false;
-    for (let i = 0; i < menuItems.length; i++) {
-        const qty = parseInt(items[i], 10) || 0;
-        if (qty <= 0) continue;
-        const item = menuItems[i];
-        let display = item.name;
-        if (item.lactoOvo) display += '/奶蛋素';
-        L.push(padLine(display, 'x' + qty, 32));
-        hasItem = true;
-    }
-    if (!hasItem) L.push('  (無)');
-
-    // 辣度
-    if (order.spiceNote) L.push('  ' + order.spiceNote);
-
-    L.push('--------------------------------');
-    L.push(padLine('合計:', 'NT$ ' + total, 32));
-    L.push('');
-    return L;
-}
 
 /**
  * 把品名+數量排成左右對齊(中文佔 2 半形寬,英文 1)
@@ -1790,6 +1615,47 @@ function resetPosForm(){
     resetMenuState();
 }
 function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/'/g,"&#39;").replace(/"/g,'&quot;');}
+
+// ══════════════════════════════════════════════════════════
+//  一鍵列印全部訂單：逐筆加入 CloudPRNT 佇列 → Pi 自動印出
+// ══════════════════════════════════════════════════════════
+async function printAllOrders() {
+    const btn = document.getElementById('printAllBtn');
+    const statusEl = document.getElementById('searchStatus');
+
+    const printable = allOrders.filter(o =>
+        o.status !== '隱藏' && o.status !== '已隱藏' && o.status !== '已取消'
+    );
+    if (printable.length === 0) { alert('沒有可列印的訂單'); return; }
+    if (!confirm(`確定要列印全部 ${printable.length} 筆訂單嗎？\n每筆間隔 2 秒，約 ${printable.length * 2} 秒後全部加入佇列，印表機陸續印出。`)) return;
+
+    btn.disabled = true;
+    btn.innerText = '⏳ 排入中...';
+    let ok = 0, fail = 0;
+
+    for (let i = 0; i < printable.length; i++) {
+        const o = printable[i];
+        statusEl.innerText = `列印中 ${i+1}/${printable.length}：#${o.orderId} ${o.name}`;
+        try {
+            const controller = new AbortController();
+            const tid = setTimeout(() => controller.abort(), 15000);
+            const res = await fetch(WORKER_API_URL + 'posReprint=' + encodeURIComponent(o.orderId) + '&_=' + Date.now(), {signal: controller.signal});
+            clearTimeout(tid);
+            const data = await res.json();
+            if (data.ok) ok++;
+            else { fail++; console.warn('[printAll] 失敗:', o.orderId, data.message); }
+        } catch(e) {
+            fail++;
+            console.error('[printAll] 錯誤:', o.orderId, e);
+        }
+        if (i < printable.length - 1) await new Promise(r => setTimeout(r, 2000));
+    }
+
+    btn.disabled = false;
+    btn.innerText = '🖨️ 列印全部訂單';
+    statusEl.innerText = `✅ ${ok} 筆已加入佇列${fail > 0 ? `（${fail} 筆失敗）` : ''}，印表機 15 秒內陸續印出`;
+}
+
 </script>
 </body>
 </html>
