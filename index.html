@@ -54,6 +54,11 @@
         .submit-btn.green{background:#2e7d32;}
         .submit-btn.gray{background:#555;}
         .submit-btn.blue{background:#1565c0;}
+        .btn-split-row{display:flex;gap:8px;margin-top:10px;}
+        .btn-split-row .submit-btn{margin-top:0;font-size:1em;padding:13px 8px;}
+        .store-tabs{display:flex;gap:6px;margin:8px 0 4px;padding:0;}
+        .store-tab{flex:1;padding:7px 4px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5;color:#555;font-size:.85em;cursor:pointer;font-weight:bold;}
+        .store-tab.active{background:#1565c0;color:#fff;border-color:#1565c0;}
 
         .payment-section{background:#fff8e1;border:1px solid #ffd54f;border-radius:10px;padding:15px;margin-bottom:15px;}
         .payment-section h4{margin:0 0 10px;color:#e65100;font-size:1em;}
@@ -366,7 +371,7 @@ select.date-locked {
             <h3>📋 訂單管理</h3>
             <div style="display:flex;gap:8px;align-items:center;">
                 <button onclick="printAllOrders()" id="printAllBtn" style="font-size:.75em;padding:4px 10px;background:#1565c0;color:#fff;border:none;border-radius:6px;cursor:pointer;">🖨️ 列印全部訂單</button>
-                <button onclick="runTestPrint()" style="font-size:.75em;padding:4px 10px;background:#e65100;color:#fff;border:none;border-radius:6px;cursor:pointer;">🖨️ 印表機測試</button>
+                
                 <button class="close-btn" onclick="closeModal('searchModal')">×</button>
             </div>
         </div>
@@ -374,6 +379,11 @@ select.date-locked {
             <label>電話末三碼篩選</label>
             <input type="tel" id="searchPhone" class="search-last3" placeholder="例：678" maxlength="3" oninput="doSearch()" autocomplete="off" inputmode="numeric">
             <div class="search-hint">輸入末三碼即時篩選，空白則顯示全部</div>
+        <div class="store-tabs" id="storeFilterTabs">
+            <button class="store-tab" id="tab-all"      onclick="setStoreFilter('')">全部訂單</button>
+            <button class="store-tab" id="tab-jinjiang" onclick="setStoreFilter('鎮江店')">🏪 鎮江店</button>
+            <button class="store-tab" id="tab-qingcheng"onclick="setStoreFilter('慶城店')">🏪 慶城店</button>
+        </div>
         </div>
         <div id="searchStatus" class="search-status"></div>
         <div id="searchResults" style="max-height:58vh;overflow-y:auto;padding-right:2px;"></div>
@@ -545,7 +555,10 @@ select.date-locked {
             <div id="summaryItems"></div>
             <div class="tot" id="summaryTotal"></div>
         </div>
-        <button class="submit-btn green" id="posSubmitBtn" onclick="submitPosOrder()">✅ 建立門市訂單</button>
+        <div class="btn-split-row">
+            <button class="submit-btn green" id="posSubmitPrintBtn" onclick="submitPosOrder(true)">🖨️ 建立+印單據</button>
+            <button class="submit-btn gray" id="posSubmitBtn" onclick="submitPosOrder(false)">✅ 建立不印單據</button>
+        </div>
     </div>
 </div>
 
@@ -566,6 +579,13 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbyivJXyXT9nGG1QnnilWLIe
 // 透過 Cloudflare Worker 代理 GET 請求 → 解決 GitHub Pages CORS / Failed to fetch
 // POST 仍直接打 GAS（no-cors 模式不需要回應）
 const WORKER_API_URL = 'https://serenity-cloudprnt.yehlc.workers.dev/?api=1&';
+
+// ── 門市設定：由 URL 參數 ?branch=jinjiang|qingcheng 決定 ──────────
+const _urlBranch = new URLSearchParams(location.search).get('branch') || '';
+const POS_BRANCH = _urlBranch === 'qingcheng' ? '慶城店' : '鎮江店';  // 本平板所屬門市
+let currentStoreFilter = _urlBranch === 'qingcheng' ? '慶城店'         // 預設展示門市
+                       : _urlBranch === 'jinjiang'  ? '鎮江店'
+                       : '';  // 空白 = 全部（老闆/主管用）
 const POS_CLIENT_VERSION = 'POS_CLIENT_2026_05_22_01';
 
 function postGasFireAndForget(payload) {
@@ -986,7 +1006,7 @@ function openPosModal() {
     setTimeout(refreshDateLock, 50);
 }
 
-function submitPosOrder() {
+function submitPosOrder(withPrint) {
     if (total <= 0) { alert('餐點數量全為 0，請先選擇餐點！'); return; }
     const name  = document.getElementById('posCustName').value.trim();
     const phone = document.getElementById('posCustPhone').value.trim();
@@ -1005,6 +1025,10 @@ function submitPosOrder() {
 
     const spiceNote = qty[6] > 0 ? `清蒸臭豆腐：${stinkTofuSpice}` : '';
 
+    const _sbtn1 = document.getElementById('posSubmitPrintBtn');
+    const _sbtn2 = document.getElementById('posSubmitBtn');
+    if(_sbtn1) _sbtn1.disabled = true;
+    if(_sbtn2) _sbtn2.disabled = true;
     setBtnState('posSubmitBtn', '建立中...', true);
     
     postGasFireAndForget({
@@ -1013,7 +1037,7 @@ function submitPosOrder() {
         orderId: null,
         name: name,
         phone: phone,
-        branch: '鎮江店',
+        branch: POS_BRANCH,
         date: date,
         time: time,
         totalAmount: total,
@@ -1022,7 +1046,8 @@ function submitPosOrder() {
         payStatus: payStatus,
         depositAmount: depAmt,
         spiceNote: spiceNote,
-        smsNotify: true
+        smsNotify: true,
+        skipPrint: !withPrint   // ★ false=印, true=不印
     });
 
     // 【內網列印】POS 送出訂單後順便列印一張單據給客人
@@ -1042,18 +1067,46 @@ function submitPosOrder() {
 
     closeModal('posModal');
     resetPosForm();
-    setBtnState('posSubmitBtn', '✅ 建立門市訂單', false);
+    setBtnState('posSubmitBtn', '✅ 建立不印單據', false);
+    const _rb1 = document.getElementById('posSubmitPrintBtn');
+    const _rb2 = document.getElementById('posSubmitBtn');
+    if(_rb1) { _rb1.disabled = false; _rb1.innerText = '🖨️ 建立+印單據'; }
+    if(_rb2) { _rb2.disabled = false; }
 }
 
 // ══════════════════════════════════════════════════════════
 //  POS：訂單管理（搜尋 + 列表）
 // ══════════════════════════════════════════════════════════
+// ── 門市篩選標籤 ──────────────────────────────────────────────────
+function setStoreFilter(branch) {
+    currentStoreFilter = branch;
+    // Update tab active state
+    ['tab-all','tab-jinjiang','tab-qingcheng'].forEach(id => {
+        const t = document.getElementById(id);
+        if (t) t.classList.remove('active');
+    });
+    const activeId = branch === '鎮江店' ? 'tab-jinjiang'
+                   : branch === '慶城店' ? 'tab-qingcheng' : 'tab-all';
+    const activeEl = document.getElementById(activeId);
+    if (activeEl) activeEl.classList.add('active');
+
+    // Re-render with new filter
+    doSearch();
+    const label = branch || '全部';
+    const filtered = branch
+        ? allOrders.filter(o => (o.branch||'') === branch && o.status !== '隱藏' && o.status !== '已隱藏')
+        : allOrders.filter(o => o.status !== '隱藏' && o.status !== '已隱藏');
+    document.getElementById('searchStatus').innerText = `${label}：共 ${filtered.length} 筆`;
+}
+
 async function openSearchModal() {
     document.getElementById('searchPhone').value='';
     document.getElementById('searchStatus').innerText='載入訂單中...';
     document.getElementById('searchResults').innerHTML='';
     document.getElementById('searchModal').style.display='flex';
     await loadAllOrders();
+    // Init store filter tab selection from URL param
+    setStoreFilter(currentStoreFilter);
 }
 
 async function loadAllOrders() {
@@ -1095,17 +1148,23 @@ async function loadAllOrders() {
 
 function doSearch() {
     const last3 = document.getElementById('searchPhone').value.trim();
+    // Apply store filter first
+    const storeOrders = currentStoreFilter
+        ? allOrders.filter(o => (o.branch || '') === currentStoreFilter)
+        : allOrders;
     if (!last3) {
-        renderOrderList(allOrders);
-        document.getElementById('searchStatus').innerText=`共 ${allOrders.length} 筆訂單`;
+        renderOrderList(storeOrders);
+        const label = currentStoreFilter || '全部';
+        document.getElementById('searchStatus').innerText = `${label}：共 ${storeOrders.length} 筆訂單`;
         return;
     }
-    const filtered = allOrders.filter(o=>{
+    const filtered = storeOrders.filter(o=>{
         const p = String(o.phone||'').replace(/[\s\-]/g,'');
         return p.endsWith(last3);
     });
+    const label = currentStoreFilter || '全部';
     document.getElementById('searchStatus').innerText =
-        filtered.length>0?`末三碼「${last3}」找到 ${filtered.length} 筆`:`末三碼「${last3}」查無結果`;
+        filtered.length>0?`[${label}] 末三碼「${last3}」找到 ${filtered.length} 筆`:`[${label}] 末三碼「${last3}」查無結果`;
     renderOrderList(filtered);
 }
 
@@ -1565,46 +1624,22 @@ function padLine(left, right, totalWidth) {
  * 從訂單管理列表呼叫:列印某張訂單
  * 流程:disable 按鈕 → 呼叫印表機 → 顯示結果 → 恢復按鈕
  */
-async function handlePrintOrder(orderJson) {
+function handlePrintOrder(orderJson) {
+    // ★ Fire-and-forget：立刻回傳，不等伺服器回應，避免讓員工等待
     let order;
-    try {
-        order = (typeof orderJson === 'string') ? JSON.parse(orderJson) : orderJson;
-    } catch(e) {
-        alert('訂單資料解析失敗:' + e);
-        return;
-    }
+    try { order = (typeof orderJson === 'string') ? JSON.parse(orderJson) : orderJson; }
+    catch(e) { alert('訂單資料解析失敗:' + e); return; }
+
     const btn = document.querySelector(`button[data-print-btn="${order.orderId}"]`);
-    if (btn) {
-        btn.disabled = true;
-        btn.innerText = '⏳ 加入佇列...';
-    }
-    try {
-        const controller = new AbortController();
-        const tid = setTimeout(() => controller.abort(), 15000);
-        const res  = await fetch(WORKER_API_URL + 'posReprint=' + encodeURIComponent(order.orderId) + '&_=' + Date.now(), {signal: controller.signal});
-        clearTimeout(tid);
-        const data = await res.json();
-        if (btn) { btn.disabled = false; btn.innerText = '🖨️ 列印'; }
-        if (data.ok) {
-            if (btn) {
-                btn.innerText = '✅ 已排入佇列';
-                btn.style.background = '#4caf50';
-                btn.style.color = '#fff';
-                setTimeout(() => {
-                    btn.innerText = '🖨️ 列印';
-                    btn.style.background = '';
-                    btn.style.color = '';
-                }, 3000);
-            }
-        } else {
-            alert('⚠️ 列印失敗：' + (data.message || '未知錯誤'));
-        }
-    } catch(e) {
-        if (btn) { btn.disabled = false; btn.innerText = '🖨️ 列印'; }
-        console.error('[handlePrintOrder]', e);
-        const msg = e.name === 'AbortError' ? '請求逾時' : e.message;
-        alert('❌ 列印請求失敗：' + msg);
-    }
+    if (btn) { btn.innerText = '✅ 排入!'; btn.style.background = '#4caf50'; btn.style.color = '#fff'; }
+    setTimeout(() => {
+        if (btn) { btn.innerText = '🖨️ 列印'; btn.style.background = ''; btn.style.color = ''; }
+    }, 2500);
+
+    fetch(WORKER_API_URL + 'posReprint=' + encodeURIComponent(order.orderId) + '&_=' + Date.now())
+        .then(r => r.json())
+        .then(d => { if (!d.ok) console.warn('[print] 排入失敗:', order.orderId, d.message); })
+        .catch(e => console.error('[print]', order.orderId, e));
 }
 
 function resetMenuState(){qty=new Array(menuItems.length).fill(0);renderMenu();calcTotal();}
@@ -1617,43 +1652,44 @@ function resetPosForm(){
 function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/'/g,"&#39;").replace(/"/g,'&quot;');}
 
 // ══════════════════════════════════════════════════════════
-//  一鍵列印全部訂單：逐筆加入 CloudPRNT 佇列 → Pi 自動印出
+//  一鍵列印全部訂單：同時批次送出，大幅加速
 // ══════════════════════════════════════════════════════════
 async function printAllOrders() {
-    const btn = document.getElementById('printAllBtn');
+    const btn      = document.getElementById('printAllBtn');
     const statusEl = document.getElementById('searchStatus');
 
-    const printable = allOrders.filter(o =>
+    // 依目前門市篩選過濾可列印訂單
+    let printable = allOrders.filter(o =>
         o.status !== '隱藏' && o.status !== '已隱藏' && o.status !== '已取消'
     );
-    if (printable.length === 0) { alert('沒有可列印的訂單'); return; }
-    if (!confirm(`確定要列印全部 ${printable.length} 筆訂單嗎？\n每筆間隔 2 秒，約 ${printable.length * 2} 秒後全部加入佇列，印表機陸續印出。`)) return;
+    if (currentStoreFilter) {
+        printable = printable.filter(o => (o.branch || '') === currentStoreFilter);
+    }
+
+    if (printable.length === 0) { alert('目前篩選條件下沒有可列印的訂單'); return; }
+    const label = currentStoreFilter || '全部';
+    if (!confirm(`確定要列印「${label}」訂單，共 ${printable.length} 筆？\n所有佇列將同時送出（約 3 秒完成），印表機陸續印出。`)) return;
 
     btn.disabled = true;
-    btn.innerText = '⏳ 排入中...';
-    let ok = 0, fail = 0;
+    btn.innerText = `⏳ 批次送出 ${printable.length} 筆...`;
+    statusEl.innerText = `正在批次加入列印佇列...`;
 
-    for (let i = 0; i < printable.length; i++) {
-        const o = printable[i];
-        statusEl.innerText = `列印中 ${i+1}/${printable.length}：#${o.orderId} ${o.name}`;
-        try {
-            const controller = new AbortController();
-            const tid = setTimeout(() => controller.abort(), 15000);
-            const res = await fetch(WORKER_API_URL + 'posReprint=' + encodeURIComponent(o.orderId) + '&_=' + Date.now(), {signal: controller.signal});
-            clearTimeout(tid);
-            const data = await res.json();
-            if (data.ok) ok++;
-            else { fail++; console.warn('[printAll] 失敗:', o.orderId, data.message); }
-        } catch(e) {
-            fail++;
-            console.error('[printAll] 錯誤:', o.orderId, e);
-        }
-        if (i < printable.length - 1) await new Promise(r => setTimeout(r, 2000));
-    }
+    // ★ Promise.allSettled 同時送出全部請求（比 for-loop 快 N 倍）
+    const results = await Promise.allSettled(
+        printable.map(o =>
+            fetch(WORKER_API_URL + 'posReprint=' + encodeURIComponent(o.orderId) + '&_=' + Date.now())
+                .then(r => r.json())
+                .then(d => ({ id: o.orderId, ok: !!d.ok }))
+                .catch(() => ({ id: o.orderId, ok: false }))
+        )
+    );
+
+    const ok   = results.filter(r => r.value?.ok).length;
+    const fail = printable.length - ok;
 
     btn.disabled = false;
     btn.innerText = '🖨️ 列印全部訂單';
-    statusEl.innerText = `✅ ${ok} 筆已加入佇列${fail > 0 ? `（${fail} 筆失敗）` : ''}，印表機 15 秒內陸續印出`;
+    statusEl.innerText = `✅ ${ok} 筆已加入佇列${fail > 0 ? `，${fail} 筆失敗` : ''}，印表機 15-30 秒內陸續印出`;
 }
 
 </script>
