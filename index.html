@@ -54,6 +54,19 @@
         .submit-btn.green{background:#2e7d32;}
         .submit-btn.gray{background:#555;}
         .submit-btn.blue{background:#1565c0;}
+        .src-badge{display:inline-block;font-size:.7em;padding:1px 7px;border-radius:10px;margin-right:4px;font-weight:bold;vertical-align:middle;}
+        .src-badge.line{background:#06c755;color:#fff;}
+        .src-badge.pos{background:#e65100;color:#fff;}
+        .branch-badge{display:inline-block;font-size:.7em;padding:1px 7px;border-radius:10px;margin-right:4px;background:#1565c0;color:#fff;font-weight:bold;vertical-align:middle;}
+        .btn-pay{flex:1;padding:8px 4px;border:1px solid #1565c0;border-radius:8px;background:#e3f2fd;color:#1565c0;font-size:.8em;font-weight:bold;cursor:pointer;}
+        .btn-pay:hover{background:#1565c0;color:#fff;}
+        .pay-status-row{display:flex;gap:8px;margin-bottom:12px;}
+        .pay-status-btn{flex:1;padding:14px 4px;border:2px solid #ddd;border-radius:10px;background:#fff;font-size:.9em;cursor:pointer;text-align:center;}
+        .pay-status-btn.sel-red{border-color:#c62828;background:#fce4ec;color:#c62828;font-weight:bold;}
+        .pay-status-btn.sel-orange{border-color:#e65100;background:#fff3e0;color:#e65100;font-weight:bold;}
+        .pay-status-btn.sel-green{border-color:#2e7d32;background:#e8f5e9;color:#2e7d32;font-weight:bold;}
+        #depositInputWrap{display:none;margin-bottom:12px;}
+        #depositInputWrap input{width:100%;padding:10px;font-size:1em;border:1px solid #ccc;border-radius:8px;box-sizing:border-box;}
         .btn-split-row{display:flex;gap:8px;margin-top:10px;}
         .btn-split-row .submit-btn{margin-top:0;font-size:1em;padding:13px 8px;}
 
@@ -329,7 +342,7 @@ select.date-locked {
 <div class="header" id="pageHeader">
     <div class="header-title" id="headerTitle">祥和蔬食料理 - 年菜預購</div>
     <div class="header-actions" id="headerActions">
-        <button class="hdr-btn orange" onclick="openPosModal()">🖥️ 新增</button>
+        <button class="hdr-btn orange" id="newOrderBtn" onclick="openPosModal()">🖥️ 新增</button>
         <button class="hdr-btn blue" onclick="openSearchModal()">📋 訂單</button>
     </div>
 </div>
@@ -394,7 +407,7 @@ select.date-locked {
 
         <div class="form-group">
             <label>取貨門市</label>
-            <input type="text" value="鎮江店" readonly style="background:#f5f5f5;color:#777;cursor:not-allowed;">
+            <input type="text" id="editInfoBranch" readonly style="background:#f5f5f5;color:#777;cursor:not-allowed;" placeholder="取貨門市">
         </div>
         <div class="form-group">
             <label>取貨日期</label>
@@ -1016,6 +1029,11 @@ function updatePosSummary() {
 }
 
 function openPosModal() {
+    // ★ Bug fix: 禁止在編輯訂單途中新增
+    if (isEditMode) {
+        alert('⚠️ 目前正在修改訂單 #' + (currentEditOrder?.orderId||'') + '，請先完成或取消修改後再新增訂單。');
+        return;
+    }
     if (total <= 0) { alert('餐點數量全為 0，請先選擇餐點！'); return; }
     selPay('none');
     updatePosSummary();
@@ -1228,15 +1246,20 @@ function renderOrderList(orders) {
         const color    = STATUS_COLOR[o.status]||'#666';
         const phoneTail= o.phone?'末四碼 '+String(o.phone).replace(/[\s\-]/g,'').slice(-4):'';
         const paidInfo = o.paid>0?`　已付：NT$ ${o.paid}`:'';
-        // 【修改1】取貨日前10天顯示鎖定
         const locked   = daysUntilPickup(o.date) <= 10;
+        // ★ 來源徽章（LINE/POS）
+        const srcClass = (o.source==='POS') ? 'pos' : 'line';
+        const srcLabel = (o.source==='POS') ? '🖥️ POS' : '💬 LINE';
+        // ★ 分店徽章
+        const branchBadge = o.branch ? `<span class="branch-badge">${o.branch}</span>` : '';
         const editBtn  = locked
             ? `<button class="btn-edit" style="background:#aaa;cursor:default;" disabled title="取貨日前10天無法修改">🔒 已鎖定</button>`
             : `<button class="btn-edit" onclick='doEditOrder(${JSON.stringify(o).replace(/'/g,"&#39;")})'>✏️ 編輯</button>`;
+        const oJson = JSON.stringify(o).replace(/'/g,"&#39;");
         return `<div class="order-card">
             <div class="order-card-top">
                 <div>
-                    <div class="order-card-name">#${o.orderId}　${o.name}</div>
+                    <div class="order-card-name"><span class="src-badge ${srcClass}">${srcLabel}</span>${branchBadge}<strong>#${o.orderId}</strong>　${o.name}</div>
                     <div class="order-card-meta">📱 ${phoneTail}　📅 ${o.date}</div>
                 </div>
                 <span class="status-tag" style="color:${color};border:1px solid ${color};background:${color}1a;">${o.status}</span>
@@ -1244,6 +1267,7 @@ function renderOrderList(orders) {
             <div class="order-card-amount">💰 總額：NT$ ${o.total}${paidInfo}</div>
             <div class="order-card-actions">
                 ${editBtn}
+                <button class="btn-pay" onclick='openPayStatusModal(${oJson})'>💰 付款</button>
                 <button class="btn-print" data-print-btn="${o.orderId}" onclick='handlePrintOrder(${JSON.stringify(o).replace(/'/g,"&#39;")})'>🖨️ 列印</button>
                 <button class="btn-hide" onclick="confirmHideOrder('${o.orderId}','${escHtml(o.name)}')">🗑 隱藏</button>
             </div>
@@ -1342,8 +1366,11 @@ function openEditInfoModal() {
     // 【修改4】預填日期並同步時間選單
     document.getElementById('editPickupDate').value = o.date||'';
     syncTimeOptions('editPickupDate','editPickupTime', o.time||'');
-    document.getElementById('editCustName').value  = o.name||'';
-    document.getElementById('editCustPhone').value = o.phone||'';
+    document.getElementById('editCustName').value   = o.name||'';
+    document.getElementById('editCustPhone').value  = o.phone||'';
+    // ★ 動態顯示正確門市（不讓員工改）
+    const _branchInput = document.getElementById('editInfoBranch');
+    if (_branchInput) _branchInput.value = o.branch || '（未設定）';
 
     document.getElementById('editInfoModal').style.display='flex';
 }
@@ -1378,7 +1405,7 @@ function submitEditOrder() {
         orderId: o.orderId,
         name: name,
         phone: phone,
-        branch: '鎮江店',
+        branch: o.branch || '鎮江店',  // ★ 保留原始門市，不讓員工修改
         date: date,
         time: time,
         totalAmount: total,
@@ -1705,6 +1732,78 @@ function resetPosForm(){
     document.getElementById('posPickupTime').innerHTML='<option value="">請先選擇日期</option>';
     resetMenuState();
 }
+
+// ══════════════════════════════════════════════════════════
+//  💰 付款狀態快速修改（訂單管理列表）
+// ══════════════════════════════════════════════════════════
+let _payOrder = null;
+let _payMode  = '';
+
+function openPayStatusModal(order) {
+    _payOrder = order;
+    _payMode  = '';
+    document.getElementById('payStatusOrderInfo').innerHTML =
+        `訂單 <strong>#${order.orderId}</strong> — ${order.name}<br>` +
+        `目前狀態：<strong>${order.status}</strong>　總額：NT$ ${order.total}`;
+    // Reset buttons
+    ['psbtn0','psbtn1','psbtn2'].forEach(id => {
+        const b = document.getElementById(id);
+        b.className = 'pay-status-btn';
+    });
+    document.getElementById('depositInputWrap').style.display = 'none';
+    document.getElementById('payDepositInput').value = '';
+    // Pre-select current status
+    if (order.status==='付清') selectPayBtn('付清');
+    else if (order.status==='付訂金') selectPayBtn('付訂金');
+    else selectPayBtn('未付');
+    document.getElementById('payStatusModal').style.display = 'flex';
+}
+
+function selectPayBtn(mode) {
+    _payMode = mode;
+    const map = {'未付':'sel-red','付訂金':'sel-orange','付清':'sel-green'};
+    ['psbtn0','psbtn1','psbtn2'].forEach(id => {
+        document.getElementById(id).className = 'pay-status-btn';
+    });
+    const idx = {'未付':0,'付訂金':1,'付清':2}[mode];
+    if (idx !== undefined) {
+        document.getElementById('psbtn'+idx).className = 'pay-status-btn '+map[mode];
+    }
+    document.getElementById('depositInputWrap').style.display = (mode==='付訂金') ? 'block' : 'none';
+}
+
+async function submitPayStatusChange() {
+    if (!_payOrder || !_payMode) { alert('請先選擇付款狀態'); return; }
+    let depAmt = 0;
+    if (_payMode === '付訂金') {
+        depAmt = parseInt(document.getElementById('payDepositInput').value) || 0;
+        if (depAmt <= 0) { alert('請輸入收取的訂金金額！'); return; }
+        if (depAmt >= _payOrder.total) { alert('訂金不能大於或等於總金額，如已全額付清請選「全額付清」。'); return; }
+    }
+    const btn = document.querySelector('#payStatusModal .submit-btn');
+    btn.disabled = true; btn.innerText = '更新中...';
+    try {
+        const params = 'posUpdatePay='+encodeURIComponent(_payOrder.orderId)+
+            '&payStatus='+encodeURIComponent(_payMode)+
+            (depAmt ? '&depositAmount='+depAmt : '');
+        const res  = await fetch(WORKER_API_URL + params + '&_=' + Date.now());
+        const data = await res.json();
+        if (data.ok) {
+            closeModal('payStatusModal');
+            // Clear cache and reload
+            try { sessionStorage.removeItem(_CACHE_KEY); } catch(e) {}
+            await loadAllOrders();
+            alert('✅ 付款狀態已更新為「' + _payMode + '」');
+        } else {
+            alert('❌ 更新失敗：' + (data.message || '未知錯誤'));
+        }
+    } catch(e) {
+        alert('❌ 網路錯誤：' + e.message);
+    } finally {
+        btn.disabled = false; btn.innerText = '✅ 確認修改';
+    }
+}
+
 function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/'/g,"&#39;").replace(/"/g,'&quot;');}
 
 // ══════════════════════════════════════════════════════════
@@ -1746,5 +1845,33 @@ async function printAllOrders() {
 }
 
 </script>
+
+<!-- 💰 付款狀態修改 Modal -->
+<div class="modal-overlay" id="payStatusModal">
+    <div class="modal-content" style="max-width:380px;">
+        <div class="modal-header">
+            <h3>💰 修改付款狀態</h3>
+            <button class="close-btn" onclick="closeModal('payStatusModal')">×</button>
+        </div>
+        <div id="payStatusOrderInfo" style="padding:6px 0 12px;color:#555;font-size:.9em;"></div>
+        <div class="pay-status-row">
+            <div class="pay-status-btn" id="psbtn0" onclick="selectPayBtn('未付')">
+                尚未付款
+            </div>
+            <div class="pay-status-btn" id="psbtn1" onclick="selectPayBtn('付訂金')">
+                付訂金
+            </div>
+            <div class="pay-status-btn" id="psbtn2" onclick="selectPayBtn('付清')">
+                全額付清
+            </div>
+        </div>
+        <div id="depositInputWrap">
+            <label style="font-size:.85em;color:#555;">收取訂金金額（NT$）</label>
+            <input type="number" id="payDepositInput" placeholder="例如：500" min="1">
+        </div>
+        <button class="submit-btn green" onclick="submitPayStatusChange()">✅ 確認修改</button>
+    </div>
+</div>
+
 </body>
 </html>
