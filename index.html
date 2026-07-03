@@ -469,7 +469,11 @@ select.date-locked {
         </div>
         <div class="form-group">
             <label>取貨門市</label>
-            <input type="text" value="鎮江店" readonly style="background:#f5f5f5;color:#777;cursor:not-allowed;">
+            <select id="orderBranch" required>
+                <option value="">請選擇取貨門市</option>
+                <option value="鎮江店">🏪 鎮江店</option>
+                <option value="慶城店">🏪 慶城店</option>
+            </select>
         </div>
         <div class="form-group">
             <label>取貨日期</label>
@@ -505,8 +509,15 @@ select.date-locked {
             <button class="close-btn" onclick="closeModal('posModal')">×</button>
         </div>
         <div class="form-group">
-            <label>取貨門市</label>
-            <input type="text" value="鎮江店" readonly style="background:#f5f5f5;color:#777;cursor:not-allowed;">
+            <label>取貨門市 <span id="posBranchRequired" style="color:red;display:none">*</span></label>
+            <!-- 老闆模式（全部門市）：下拉選 -->
+            <select id="posBranchSelect" style="display:none;">
+                <option value="">請選擇取貨門市</option>
+                <option value="鎮江店">🏪 鎮江店</option>
+                <option value="慶城店">🏪 慶城店</option>
+            </select>
+            <!-- 門市模式（鎮江/慶城）：固定顯示 -->
+            <input type="text" id="posBranchDisplay" readonly style="background:#f5f5f5;color:#777;cursor:not-allowed;" value="">
         </div>
         <div class="form-group">
             <label>取貨日期</label>
@@ -813,6 +824,17 @@ function startEdit(isEdit) {
     } else {
         action = 'new';
     }
+    // Branch field: lock on edit, allow selection on new
+    const branchEl = document.getElementById('orderBranch');
+    if (branchEl) {
+        if (isEdit && lastOrder) {
+            branchEl.disabled = true;
+            branchEl.value = lastOrder.branch || '鎮江店';
+        } else {
+            branchEl.disabled = false;
+            branchEl.value = '';
+        }
+    }
     showMenu();
 }
 
@@ -997,13 +1019,34 @@ function openPosModal() {
     if (total <= 0) { alert('餐點數量全為 0，請先選擇餐點！'); return; }
     selPay('none');
     updatePosSummary();
+
+    // ★ 動態設定取貨門市欄位
+    const sel  = document.getElementById('posBranchSelect');
+    const disp = document.getElementById('posBranchDisplay');
+    const star = document.getElementById('posBranchRequired');
+    if (POS_BRANCH_FILTER) {
+        // 鎮江店或慶城店平板：固定顯示，不能改
+        if (disp) { disp.value = POS_BRANCH_FILTER; disp.style.display = ''; }
+        if (sel)  { sel.style.display = 'none'; sel.required = false; sel.value = POS_BRANCH_FILTER; }
+        if (star) star.style.display = 'none';
+    } else {
+        // 老闆全部門市平板：必選
+        if (disp) disp.style.display = 'none';
+        if (sel)  { sel.style.display = ''; sel.required = true; sel.value = ''; }
+        if (star) star.style.display = '';
+    }
+
     document.getElementById('posModal').style.display = 'flex';
-    // 【需求3】Modal 打開時也檢查日期鎖定
     setTimeout(refreshDateLock, 50);
 }
 
 function submitPosOrder(withPrint) {
     if (total <= 0) { alert('餐點數量全為 0，請先選擇餐點！'); return; }
+    // 老闆模式：確認已選取貨門市
+    if (!POS_BRANCH_FILTER) {
+        const selBranch = document.getElementById('posBranchSelect')?.value || '';
+        if (!selBranch) { alert('請選擇取貨門市！'); return; }
+    }
     const name  = document.getElementById('posCustName').value.trim();
     const phone = document.getElementById('posCustPhone').value.trim();
     const date  = document.getElementById('posPickupDate').value;
@@ -1033,7 +1076,7 @@ function submitPosOrder(withPrint) {
         orderId: null,
         name: name,
         phone: phone,
-        branch: POS_BRANCH,
+        branch: POS_BRANCH_FILTER || (document.getElementById('posBranchSelect')?.value) || POS_BRANCH,
         date: date,
         time: time,
         totalAmount: total,
@@ -1084,12 +1127,38 @@ async function openSearchModal() {
     await loadAllOrders();
 }
 
+// ── 訂單快取 key（依門市區分）────────────────────────────────────
+const _CACHE_KEY = 'serenity_orders_' + (POS_BRANCH_FILTER || 'all');
+const _CACHE_TTL = 3 * 60 * 1000;  // 3 分鐘快取
+
 async function loadAllOrders() {
-    document.getElementById('searchStatus').innerText = '載入訂單中...';
+    const statusEl = document.getElementById('searchStatus');
+
+    // ★ 先讀 sessionStorage 快取，立刻顯示，再背景更新
+    try {
+        const cached = sessionStorage.getItem(_CACHE_KEY);
+        if (cached) {
+            const c = JSON.parse(cached);
+            if (Date.now() - c.ts < _CACHE_TTL) {
+                allOrders = c.orders;
+                renderOrderList(allOrders);
+                const storeLabel = POS_BRANCH_FILTER || '全部';
+                statusEl.innerText = `${storeLabel}：共 ${allOrders.length} 筆（更新中...）`;
+                _fetchOrdersFromGAS(true);  // 背景靜默更新
+                return;
+            }
+        }
+    } catch(e) { /* 快取讀取失敗，繼續正常載入 */ }
+
+    statusEl.innerText = '載入訂單中...';
+    await _fetchOrdersFromGAS(false);
+}
+
+async function _fetchOrdersFromGAS(silent) {
+    const statusEl = document.getElementById('searchStatus');
     try {
         const controller = new AbortController();
-        const tid = setTimeout(() => controller.abort(), 30000);  // 30秒（GAS 冷啟動需 15-20 秒）
-        // ★ 傳 posBranch 給 GAS，讓 GAS 直接篩選，回傳資料少、速度快
+        const tid = setTimeout(() => controller.abort(), 30000);
         const branchParam = POS_BRANCH_FILTER ? '&posBranch=' + encodeURIComponent(POS_BRANCH_FILTER) : '';
         const res  = await fetch(WORKER_API_URL + 'posListAll=1' + branchParam + '&_=' + Date.now(), {signal: controller.signal});
         clearTimeout(tid);
@@ -1097,32 +1166,37 @@ async function loadAllOrders() {
         let data;
         try { data = JSON.parse(text); }
         catch(pe) {
-            console.error('[posListAll] 非 JSON 回應 (前500字):', text.substring(0,500));
-            throw new Error('連線異常（非 JSON 回應，詳見 console）');
+            console.error('[posListAll] 非 JSON:', text.substring(0,500));
+            throw new Error('連線異常（非 JSON 回應）');
         }
-        // Worker 把上游錯誤包成 {ok:false, error, message, raw_preview...}
         if (data.ok === false || data.error === 'gas_non_json_response' || data.error === 'proxy_fetch_error') {
-            console.error('[posListAll] Worker 回報錯誤:', data);
-            if (data.raw_preview) console.error('[posListAll] GAS 原始回應前 500 字:', data.raw_preview);
-            if (data.upstream_url) console.error('[posListAll] 上游 URL:', data.upstream_url);
-            throw new Error((data.message || 'GAS 異常') + '（詳見 console）');
+            console.error('[posListAll] Worker 錯誤:', data);
+            throw new Error(data.message || 'GAS 異常');
         }
-        if (data.error) {
-            console.error('[posListAll] GAS 回傳錯誤:', data.error);
-            throw new Error('GAS 錯誤: ' + data.error);
-        }
-        // GAS 已依 posBranch 篩選，前端直接使用（無需再過濾）
+        if (data.error) throw new Error('GAS 錯誤: ' + data.error);
+
         allOrders = data.orders || [];
+        // 寫入快取
+        try { sessionStorage.setItem(_CACHE_KEY, JSON.stringify({ts: Date.now(), orders: allOrders})); } catch(e) {}
         renderOrderList(allOrders);
-        const storeLabel = POS_BRANCH_FILTER ? POS_BRANCH_FILTER : '全部';
-        document.getElementById('searchStatus').innerText = `${storeLabel}：共 ${allOrders.length} 筆訂單`;
+        const storeLabel = POS_BRANCH_FILTER || '全部';
+        statusEl.innerText = `${storeLabel}：共 ${allOrders.length} 筆訂單`;
     } catch(e) {
         console.error('[posListAll] fetch 失敗:', e);
-        const msg = e.name === 'AbortError' ? '逾時 30 秒' : (e.message || String(e));
-        document.getElementById('searchStatus').innerHTML =
-            `⚠️ 載入失敗（${msg}）` +
-            `<button onclick="loadAllOrders()" style="margin-left:10px;padding:3px 14px;border-radius:6px;border:1px solid #c00;background:#fff;color:#c00;cursor:pointer;font-size:.9em;">🔄 重試</button>`;
+        if (!silent) {
+            const msg = e.name === 'AbortError' ? '逾時 30 秒，請點重試（GAS 冷啟動）' : (e.message || String(e));
+            statusEl.innerHTML =
+                `⚠️ 載入失敗（${msg}）` +
+                `<button onclick="_clearCacheAndReload()" style="margin-left:10px;padding:3px 14px;border-radius:6px;border:1px solid #c00;background:#fff;color:#c00;cursor:pointer;font-size:.9em;">🔄 重試</button>`;
+        } else {
+            statusEl.innerText = statusEl.innerText.replace('（更新中...）', '（快取）');
+        }
     }
+}
+
+function _clearCacheAndReload() {
+    try { sessionStorage.removeItem(_CACHE_KEY); } catch(e) {}
+    loadAllOrders();
 }
 
 function doSearch() {
@@ -1473,6 +1547,9 @@ function submitOrder() {
     const phone = document.getElementById('custPhone').value.trim();
     const date  = document.getElementById('pickupDate').value;
     const time  = document.getElementById('pickupTime').value;
+    const branch = (action === 'update' && lastOrder) ? (lastOrder.branch || '鎮江店')
+        : (document.getElementById('orderBranch')?.value || '');
+    if (!branch) { alert('請選擇取貨門市！'); return; }
     if (!validateOrderForm(name,phone,date,time)) return;
 
     // 【修2】LIFF 統一以轉帳匯款方式處理(編輯舊訂單時 keep 不變)
@@ -1488,7 +1565,10 @@ function submitOrder() {
         userId:      null,  // 由 confirmCartReview 填入
         action,
         orderId:     action==='update'?lastOrder.orderId:null,
-        name, phone, branch:'鎮江店', date, time,
+        name, phone,
+        branch: (action === 'update' && lastOrder) ? (lastOrder.branch || '鎮江店')
+                : (document.getElementById('orderBranch')?.value || '鎮江店'),
+        date, time,
         totalAmount: total,
         items_qty_array: qty,
         source:      'LINE',
