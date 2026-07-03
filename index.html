@@ -1088,8 +1088,10 @@ async function loadAllOrders() {
     document.getElementById('searchStatus').innerText = '載入訂單中...';
     try {
         const controller = new AbortController();
-        const tid = setTimeout(() => controller.abort(), 15000);
-        const res  = await fetch(WORKER_API_URL + 'posListAll=1&_=' + Date.now(), {signal: controller.signal});
+        const tid = setTimeout(() => controller.abort(), 30000);  // 30秒（GAS 冷啟動需 15-20 秒）
+        // ★ 傳 posBranch 給 GAS，讓 GAS 直接篩選，回傳資料少、速度快
+        const branchParam = POS_BRANCH_FILTER ? '&posBranch=' + encodeURIComponent(POS_BRANCH_FILTER) : '';
+        const res  = await fetch(WORKER_API_URL + 'posListAll=1' + branchParam + '&_=' + Date.now(), {signal: controller.signal});
         clearTimeout(tid);
         const text = await res.text();
         let data;
@@ -1109,17 +1111,14 @@ async function loadAllOrders() {
             console.error('[posListAll] GAS 回傳錯誤:', data.error);
             throw new Error('GAS 錯誤: ' + data.error);
         }
-        // ★ 依門市篩選：URL ?branch=jinjiang 只載入鎮江店訂單，以此類推
-        const rawOrders = data.orders || [];
-        allOrders = POS_BRANCH_FILTER
-            ? rawOrders.filter(o => (o.branch || '') === POS_BRANCH_FILTER)
-            : rawOrders;
+        // GAS 已依 posBranch 篩選，前端直接使用（無需再過濾）
+        allOrders = data.orders || [];
         renderOrderList(allOrders);
         const storeLabel = POS_BRANCH_FILTER ? POS_BRANCH_FILTER : '全部';
         document.getElementById('searchStatus').innerText = `${storeLabel}：共 ${allOrders.length} 筆訂單`;
     } catch(e) {
         console.error('[posListAll] fetch 失敗:', e);
-        const msg = e.name === 'AbortError' ? '逾時 15 秒' : (e.message || String(e));
+        const msg = e.name === 'AbortError' ? '逾時 30 秒' : (e.message || String(e));
         document.getElementById('searchStatus').innerHTML =
             `⚠️ 載入失敗（${msg}）` +
             `<button onclick="loadAllOrders()" style="margin-left:10px;padding:3px 14px;border-radius:6px;border:1px solid #c00;background:#fff;color:#c00;cursor:pointer;font-size:.9em;">🔄 重試</button>`;
