@@ -1259,7 +1259,7 @@ function renderOrderList(orders) {
         return `<div class="order-card">
             <div class="order-card-top">
                 <div>
-                    <div class="order-card-name"><span class="src-badge ${srcClass}">${srcLabel}</span>${branchBadge}<strong>#${o.orderId}</strong>　${o.name}</div>
+                    <div class="order-card-name"><span class="src-badge ${srcClass}">${srcLabel}</span>${branchBadge}<strong>${o.orderId}</strong>　${o.name}</div>
                     <div class="order-card-meta">📱 ${phoneTail}　📅 ${o.date}</div>
                 </div>
                 <span class="status-tag" style="color:${color};border:1px solid ${color};background:${color}1a;">${o.status}</span>
@@ -1743,7 +1743,7 @@ function openPayStatusModal(order) {
     _payOrder = order;
     _payMode  = '';
     document.getElementById('payStatusOrderInfo').innerHTML =
-        `訂單 <strong>#${order.orderId}</strong> — ${order.name}<br>` +
+        `訂單 <strong>${order.orderId}</strong> — ${order.name}<br>` +
         `目前狀態：<strong>${order.status}</strong>　總額：NT$ ${order.total}`;
     // Reset buttons
     ['psbtn0','psbtn1','psbtn2'].forEach(id => {
@@ -1814,9 +1814,20 @@ async function printAllOrders() {
     const statusEl = document.getElementById('searchStatus');
 
     // allOrders 已按門市預先篩選，直接過濾狀態即可
-    const printable = allOrders.filter(o =>
-        o.status !== '隱藏' && o.status !== '已隱藏' && o.status !== '已取消'
-    );
+    const printable = allOrders
+        .filter(o => o.status !== '隱藏' && o.status !== '已隱藏' && o.status !== '已取消')
+        .sort((a, b) => {
+            // ★ 排序規則：鎮江店(J) 優先，慶城店(Q) 其次，各自由小到大
+            const aId = String(a.orderId || '');
+            const bId = String(b.orderId || '');
+            const aJ  = aId.startsWith('J') ? 0 : 1;
+            const bJ  = bId.startsWith('J') ? 0 : 1;
+            if (aJ !== bJ) return aJ - bJ;            // J 排 Q 前
+            // 同前綴：依數字大小升冪
+            const aNum = parseInt(aId.replace(/\D/g, ''), 10) || 0;
+            const bNum = parseInt(bId.replace(/\D/g, ''), 10) || 0;
+            return aNum - bNum;
+        });
 
     if (printable.length === 0) { alert('沒有可列印的訂單'); return; }
     const label = POS_BRANCH_FILTER || '全部';
