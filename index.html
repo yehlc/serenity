@@ -1834,21 +1834,22 @@ async function printAllOrders() {
     if (!confirm(`確定要列印「${label}」訂單，共 ${printable.length} 筆？\n所有佇列將同時送出（約 3 秒完成），印表機陸續印出。`)) return;
 
     btn.disabled = true;
-    btn.innerText = `⏳ 批次送出 ${printable.length} 筆...`;
-    statusEl.innerText = `正在批次加入列印佇列...`;
+    statusEl.innerText = `正在依序加入列印佇列（共 ${printable.length} 筆）...`;
 
-    // ★ Promise.allSettled 同時送出全部請求（比 for-loop 快 N 倍）
-    const results = await Promise.allSettled(
-        printable.map(o =>
-            fetch(WORKER_API_URL + 'posReprint=' + encodeURIComponent(o.orderId) + '&_=' + Date.now())
-                .then(r => r.json())
-                .then(d => ({ id: o.orderId, ok: !!d.ok }))
-                .catch(() => ({ id: o.orderId, ok: false }))
-        )
-    );
-
-    const ok   = results.filter(r => r.value?.ok).length;
-    const fail = printable.length - ok;
+    // ★ 循序送出（間隔 300ms）：確保 PRINT_QUEUE 中順序正確
+    //   J-001 → J-002 → ... → Q-001 → Q-002 → ...
+    let ok = 0, fail = 0;
+    for (let i = 0; i < printable.length; i++) {
+        const o = printable[i];
+        btn.innerText = `⏳ ${i+1}/${printable.length}：${o.orderId}`;
+        try {
+            const r = await fetch(WORKER_API_URL + 'posReprint=' + encodeURIComponent(o.orderId) + '&_=' + Date.now());
+            const d = await r.json();
+            if (d.ok) ok++; else { fail++; console.warn('[printAll]', o.orderId, d.message); }
+        } catch(e) { fail++; console.error('[printAll]', o.orderId, e); }
+        // 300ms 間隔確保 GAS 按順序寫入 PRINT_QUEUE
+        if (i < printable.length - 1) await new Promise(r => setTimeout(r, 300));
+    }
 
     btn.disabled = false;
     btn.innerText = '🖨️ 列印全部訂單';
