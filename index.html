@@ -1172,11 +1172,17 @@ async function loadAllOrders() {
     await _fetchOrdersFromGAS(false);
 }
 
-async function _fetchOrdersFromGAS(silent) {
+async function _fetchOrdersFromGAS(silent, attempt) {
+    attempt = attempt || 1;
+    const MAX_ATTEMPTS = 2;   // 第1次逾時→自動重試第2次（GAS已被喚醒）
+    const TIMEOUT_MS   = 28000;
     const statusEl = document.getElementById('searchStatus');
     try {
+        if (!silent && attempt > 1) {
+            statusEl.innerText = `GAS 冷啟動中，自動重試（第 ${attempt} 次）...`;
+        }
         const controller = new AbortController();
-        const tid = setTimeout(() => controller.abort(), 30000);
+        const tid = setTimeout(() => controller.abort(), TIMEOUT_MS);
         const branchParam = POS_BRANCH_FILTER ? '&posBranch=' + encodeURIComponent(POS_BRANCH_FILTER) : '';
         const res  = await fetch(WORKER_API_URL + 'posListAll=1' + branchParam + '&_=' + Date.now(), {signal: controller.signal});
         clearTimeout(tid);
@@ -1194,15 +1200,24 @@ async function _fetchOrdersFromGAS(silent) {
         if (data.error) throw new Error('GAS 錯誤: ' + data.error);
 
         allOrders = data.orders || [];
-        // 寫入快取
         try { sessionStorage.setItem(_CACHE_KEY, JSON.stringify({ts: Date.now(), orders: allOrders})); } catch(e) {}
         renderOrderList(allOrders);
         const storeLabel = POS_BRANCH_FILTER || '全部';
         statusEl.innerText = `${storeLabel}：共 ${allOrders.length} 筆訂單`;
     } catch(e) {
+        const isTimeout = e.name === 'AbortError';
+
+        // ★ 自動重試：逾時且還有剩餘次數時，靜默等1秒後再試
+        if (isTimeout && attempt < MAX_ATTEMPTS) {
+            console.warn('[posListAll] 逾時，1秒後自動重試...');
+            if (!silent) statusEl.innerText = 'GAS 冷啟動中，請稍候（自動重試）...';
+            await new Promise(r => setTimeout(r, 1000));
+            return _fetchOrdersFromGAS(silent, attempt + 1);
+        }
+
         console.error('[posListAll] fetch 失敗:', e);
         if (!silent) {
-            const msg = e.name === 'AbortError' ? '逾時 30 秒，請點重試（GAS 冷啟動）' : (e.message || String(e));
+            const msg = isTimeout ? '逾時，GAS 回應太慢，請稍後再試' : (e.message || String(e));
             statusEl.innerHTML =
                 `⚠️ 載入失敗（${msg}）` +
                 `<button onclick="_clearCacheAndReload()" style="margin-left:10px;padding:3px 14px;border-radius:6px;border:1px solid #c00;background:#fff;color:#c00;cursor:pointer;font-size:.9em;">🔄 重試</button>`;
