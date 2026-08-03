@@ -704,7 +704,11 @@ let lastOrder = null, action = 'new', posPayMode = 'none', editPayMode = 'none';
 // 沒出現的菜色代表不限制。背景抓取,不擋主流程,拿到後重新渲染一次菜單。
 let stockStatus = {};
 function loadStockStatus() {
-    return fetch(WORKER_API_URL + 'stockStatus=1&branch=' + encodeURIComponent('鎮江店'))
+    // 【修16】POS模式要查「這台平板所屬門市」(POS_BRANCH，依?branch=網址參數決定)，
+    // 不是每次都查鎮江店——之前寫死鎮江店，導致慶城店的POS平板看到的是鎮江店庫存。
+    // 一般顧客LIFF下單目前固定鎮江店，維持原樣。
+    const branchForStock = isPosMode ? POS_BRANCH : '鎮江店';
+    return fetch(WORKER_API_URL + 'stockStatus=1&branch=' + encodeURIComponent(branchForStock))
         .then(r => r.json())
         .then(res => { stockStatus = (res && res.stock) || {}; renderMenu(); })
         .catch(() => { /* 拿不到就維持不限制,不影響顧客下單 */ });
