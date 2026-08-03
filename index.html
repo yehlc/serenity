@@ -908,12 +908,13 @@ function renderMenu() {
         const div = document.createElement('div');
         div.className = 'menu-item';
 
-        // 【修14】庫存標籤:remaining為null代表這個菜色沒設庫存上限,不限制
+        // 【修15】庫存標籤:remaining為null代表這個菜色沒設庫存上限,不限制
+        // 剩餘10份以內才顯示具體數字，超過10份就不顯示(不用讓顧客一直盯著還很多的數字)
         const remaining = (item.name in stockStatus) ? stockStatus[item.name] : null;
         const stockTag = remaining === null ? '' :
             (remaining <= 0
                 ? `<div class="stock-tag sold-out">已售完</div>`
-                : `<div class="stock-tag">剩餘 ${remaining} 份</div>`);
+                : (remaining <= 10 ? `<div class="stock-tag">剩餘 ${remaining} 份</div>` : ''));
         const atCap = remaining !== null && q >= remaining;
 
         // 【修改5】清蒸臭豆腐（index 6）加辣度選項
