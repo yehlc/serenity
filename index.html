@@ -708,7 +708,10 @@ function loadStockStatus() {
     // 不是每次都查鎮江店——之前寫死鎮江店，導致慶城店的POS平板看到的是鎮江店庫存。
     // 一般顧客LIFF下單目前固定鎮江店，維持原樣。
     const branchForStock = isPosMode ? POS_BRANCH : '鎮江店';
-    return fetch(WORKER_API_URL + 'stockStatus=1&branch=' + encodeURIComponent(branchForStock))
+    // 【修20】加上 &_=Date.now() 讓每次網址都不同，避免瀏覽器直接用快取的舊回應
+    // (其他fetch呼叫都有做這件事，這裡漏掉了——這才是真正造成「數字不會更新」的原因，
+    // 跟GAS那邊30秒的伺服器端快取是兩件不同的事)
+    return fetch(WORKER_API_URL + 'stockStatus=1&branch=' + encodeURIComponent(branchForStock) + '&_=' + Date.now())
         .then(r => r.json())
         .then(res => { stockStatus = (res && res.stock) || {}; renderMenu(); })
         .catch(() => { /* 拿不到就維持不限制,不影響顧客下單 */ });
