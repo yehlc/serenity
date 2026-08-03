@@ -359,6 +359,7 @@ select.date-locked {
 <div class="header" id="pageHeader">
     <div class="header-title" id="headerTitle">祥和蔬食料理 - 年菜預購</div>
     <div class="header-actions" id="headerActions">
+        <button class="hdr-btn" style="background:#555;" onclick="clearPosCart()">🗑️ 清空</button>
         <button class="hdr-btn orange" id="newOrderBtn" onclick="openPosModal()">🖥️ 新增</button>
         <button class="hdr-btn blue" onclick="openSearchModal()">📋 訂單</button>
     </div>
@@ -532,7 +533,7 @@ select.date-locked {
     <div class="modal-content">
         <div class="modal-header">
             <h3>🖥️ 門市現場建立訂單</h3>
-            <button class="close-btn" onclick="closeModal('posModal')">×</button>
+            <button class="close-btn" onclick="closePosModalAndClear()">×</button>
         </div>
         <div class="form-group">
             <label>取貨門市 <span id="posBranchRequired" style="color:red;display:none">*</span></label>
@@ -1791,6 +1792,37 @@ function resetPosForm(){
     document.getElementById('posPickupTime').innerHTML='<option value="">請先選擇日期</option>';
     resetMenuState();
 }
+
+// 【修22】關掉「門市現場建立訂單」視窗時直接清空購物車——按X就是不想繼續這筆訂單了，
+// 比等切到背景10秒才自動清空更直覺，店員自己按取消的意圖很明確，不用額外確認。
+function closePosModalAndClear(){
+    closeModal('posModal');
+    if (total > 0) resetMenuState();
+}
+
+// 【修21】店員手動清空購物車(選單上的數量)，不用等提交訂單才會重設
+function clearPosCart(){
+    if (total > 0 && !confirm('確定要清空目前選擇的餐點數量嗎？')) return;
+    resetMenuState();
+}
+
+// 【修21】平板切到背景(切換App/回主畫面)超過10秒再切回來，自動清空購物車。
+// 原因:平板「退出」通常只是把瀏覽器切到背景，網頁本身沒有真的重新載入，
+// qty這個變數會一直留在記憶體裡，下一次打開還是舊的數量，容易誤用到
+// 上一位客人沒送出的選擇。只在POS模式、且不是正在編輯舊訂單時才會清空，
+// 10秒的緩衝是避免店員只是手滑切出去又立刻切回來，就把選好的餐點清掉。
+let _posHiddenAt = null;
+document.addEventListener('visibilitychange', function() {
+    if (!isPosMode) return;
+    if (document.visibilityState === 'hidden') {
+        _posHiddenAt = Date.now();
+    } else if (document.visibilityState === 'visible') {
+        if (_posHiddenAt && (Date.now() - _posHiddenAt > 10000) && !isEditMode) {
+            resetMenuState();
+        }
+        _posHiddenAt = null;
+    }
+});
 
 // ══════════════════════════════════════════════════════════
 //  💰 付款狀態快速修改（訂單管理列表）
