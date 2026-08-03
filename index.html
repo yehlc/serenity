@@ -183,6 +183,23 @@
     margin-top: 4px;
     font-weight: bold;
 }
+/* 【修14】庫存標籤:剩餘份數(綠)/已售完(紅) */
+.stock-tag {
+    display: inline-block;
+    font-size: 0.78em;
+    color: #2e7d32;
+    background: #e8f5e9;
+    border: 1px solid #a5d6a7;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-top: 4px;
+    font-weight: bold;
+}
+.stock-tag.sold-out {
+    color: #c62828;
+    background: #ffebee;
+    border-color: #ef9a9a;
+}
 /* 【需求3】日期選單鎖定狀態 */
 select.date-locked {
     background-color: #fff8e1 !important;
@@ -683,6 +700,16 @@ let total = 0;
 let qty   = new Array(menuItems.length).fill(0); // 長度現為 22（含松露蘿蔔糕）
 let lastOrder = null, action = 'new', posPayMode = 'none', editPayMode = 'none';
 
+// 【修14】庫存狀態:{菜名: 剩餘數量}，只有設了庫存上限的菜色才會出現在這裡，
+// 沒出現的菜色代表不限制。背景抓取,不擋主流程,拿到後重新渲染一次菜單。
+let stockStatus = {};
+function loadStockStatus() {
+    return fetch(WORKER_API_URL + 'stockStatus=1&branch=' + encodeURIComponent('鎮江店'))
+        .then(r => r.json())
+        .then(res => { stockStatus = (res && res.stock) || {}; renderMenu(); })
+        .catch(() => { /* 拿不到就維持不限制,不影響顧客下單 */ });
+}
+
 // ══════════════════════════════════════════════════════════
 //  內網列印設定 — Star mC-Print3 WebPRNT
 // ══════════════════════════════════════════════════════════
@@ -864,6 +891,7 @@ function showMenu() {
     document.getElementById('noticeBanner').style.display = 'block';
     renderMenu();
     calcTotal();
+    loadStockStatus();  // 【修14】背景載入庫存狀態，回來後會自動re-render一次更新+按鈕狀態
     // 【需求3】編輯舊訂單載入後若含限定品項,也要鎖定取貨日
     setTimeout(refreshDateLock, 50);
     if (!isPosMode) document.getElementById('cartBar').classList.add('show');
@@ -880,6 +908,14 @@ function renderMenu() {
         const div = document.createElement('div');
         div.className = 'menu-item';
 
+        // 【修14】庫存標籤:remaining為null代表這個菜色沒設庫存上限,不限制
+        const remaining = (item.name in stockStatus) ? stockStatus[item.name] : null;
+        const stockTag = remaining === null ? '' :
+            (remaining <= 0
+                ? `<div class="stock-tag sold-out">已售完</div>`
+                : `<div class="stock-tag">剩餘 ${remaining} 份</div>`);
+        const atCap = remaining !== null && q >= remaining;
+
         // 【修改5】清蒸臭豆腐（index 6）加辣度選項
         const spiceHtml = (i === 6) ? `
             <div class="spice-row">
@@ -893,7 +929,7 @@ function renderMenu() {
         const ctrl = `<div class="qty-controls">
             <button class="qty-btn" onclick="upd(${i},-1)">-</button>
             <input class="qty-input" id="q${i}" value="${q}" readonly>
-            <button class="qty-btn" onclick="upd(${i},1)">+</button>
+            <button class="qty-btn" id="qplus${i}" ${atCap ? 'disabled' : ''} onclick="upd(${i},1)">+</button>
         </div>`;
 
         // 【修1】奶蛋素標籤
@@ -917,6 +953,7 @@ function renderMenu() {
                 </div>
                 <div class="menu-item-price">NT$ ${item.price}</div>
                 ${dateTag}
+                ${stockTag}
                 ${spiceHtml}
             </div>${ctrl}`;
         c.appendChild(div);
@@ -924,8 +961,14 @@ function renderMenu() {
 }
 
 function upd(i, d) {
-    qty[i] = Math.max(0, qty[i] + d);
+    const item = menuItems[i];
+    const remaining = (item.name in stockStatus) ? stockStatus[item.name] : null;
+    let next = qty[i] + d;
+    if (remaining !== null) next = Math.min(next, remaining);  // 【修14】不能超過剩餘庫存
+    qty[i] = Math.max(0, next);
     document.getElementById('q' + i).value = qty[i];
+    const plusBtn = document.getElementById('qplus' + i);
+    if (plusBtn) plusBtn.disabled = (remaining !== null && qty[i] >= remaining);
     calcTotal();
     // 【需求3】更新「日期鎖定」狀態
     refreshDateLock();
