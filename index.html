@@ -92,7 +92,7 @@
         .btn-hide{flex:1;padding:8px;background:#fff;color:#c62828;border:1.5px solid #c62828;border-radius:6px;font-weight:bold;cursor:pointer;font-size:.88em;}
         .status-tag{font-weight:bold;font-size:.82em;padding:2px 7px;border-radius:8px;white-space:nowrap;}
 
-        .search-last3{font-size:1.8em!important;letter-spacing:.4em;text-align:center;font-weight:bold!important;border:2px solid #1565c0!important;border-radius:10px!important;}
+        .search-last3{font-size:1.1em!important;letter-spacing:normal;text-align:left;font-weight:bold!important;border:2px solid #1565c0!important;border-radius:10px!important;padding:10px 12px!important;}
         .search-hint{font-size:.82em;color:#999;text-align:center;margin-top:4px;}
         .search-status{font-size:.85em;color:#666;margin:6px 0 8px;min-height:1.2em;}
         .edit-info-box{background:#e3f2fd;border-left:4px solid #1565c0;padding:10px 14px;border-radius:6px;margin-bottom:15px;font-size:.88em;line-height:1.6;}
@@ -387,9 +387,9 @@ select.date-locked {
             </div>
         </div>
         <div class="form-group" style="margin-bottom:5px;">
-            <label>電話末三碼篩選</label>
-            <input type="tel" id="searchPhone" class="search-last3" placeholder="例：678" maxlength="3" oninput="doSearch()" autocomplete="off" inputmode="numeric">
-            <div class="search-hint">輸入末三碼即時篩選，空白則顯示全部</div>
+            <label>搜尋訂單</label>
+            <input type="text" id="searchPhone" class="search-last3" placeholder="姓名 / LINE名稱 / 電話末三碼 / 訂單編號" oninput="doSearch()" autocomplete="off">
+            <div class="search-hint">輸入姓名、LINE顯示名稱、電話末三碼或訂單編號即時篩選，空白則顯示全部</div>
         </div>
         <div id="searchStatus" class="search-status"></div>
         <div id="searchResults" style="max-height:58vh;overflow-y:auto;padding-right:2px;"></div>
@@ -1223,21 +1223,26 @@ function _clearCacheAndReload() {
 }
 
 function doSearch() {
-    const last3 = document.getElementById('searchPhone').value.trim();
+    const kw = document.getElementById('searchPhone').value.trim();
     // allOrders is already pre-filtered by branch (from loadAllOrders)
-    if (!last3) {
+    if (!kw) {
         renderOrderList(allOrders);
         const storeLabel = POS_BRANCH_FILTER || '全部';
         document.getElementById('searchStatus').innerText = `${storeLabel}：共 ${allOrders.length} 筆訂單`;
         return;
     }
+    const kwLower = kw.toLowerCase();
     const filtered = allOrders.filter(o=>{
-        const p = String(o.phone||'').replace(/[\s\-]/g,'');
-        return p.endsWith(last3);
+        const p    = String(o.phone||'').replace(/[\s\-]/g,'');
+        const name = String(o.name||'').toLowerCase();
+        const ln   = String(o.lineName||'').toLowerCase();
+        const oid  = String(o.orderId||'').toLowerCase();
+        // 電話：末幾碼比對(維持原本習慣輸入末三碼的用法)；其他欄位用包含比對
+        return p.endsWith(kw) || name.includes(kwLower) || ln.includes(kwLower) || oid.includes(kwLower);
     });
     const storeLabel2 = POS_BRANCH_FILTER ? `[${POS_BRANCH_FILTER}] ` : '';
     document.getElementById('searchStatus').innerText =
-        filtered.length>0?`${storeLabel2}末三碼「${last3}」找到 ${filtered.length} 筆`:`${storeLabel2}末三碼「${last3}」查無結果`;
+        filtered.length>0?`${storeLabel2}「${kw}」找到 ${filtered.length} 筆`:`${storeLabel2}「${kw}」查無結果`;
     renderOrderList(filtered);
 }
 
@@ -1257,6 +1262,7 @@ function renderOrderList(orders) {
         const srcLabel = (o.source==='POS') ? '🖥️ POS' : '💬 LINE';
         // ★ 分店徽章
         const branchBadge = o.branch ? `<span class="branch-badge">${o.branch}</span>` : '';
+        const lineNameInfo = o.lineName ? `　💬 ${escHtml(o.lineName)}` : '';
         const editBtn  = locked
             ? `<button class="btn-edit" style="background:#aaa;cursor:default;" disabled title="取貨日前10天無法修改">🔒 已鎖定</button>`
             : `<button class="btn-edit" onclick='doEditOrder(${JSON.stringify(o).replace(/'/g,"&#39;")})'>✏️ 編輯</button>`;
@@ -1265,7 +1271,7 @@ function renderOrderList(orders) {
             <div class="order-card-top">
                 <div>
                     <div class="order-card-name"><span class="src-badge ${srcClass}">${srcLabel}</span>${branchBadge}<strong>${o.orderId}</strong>　${o.name}</div>
-                    <div class="order-card-meta">📱 ${phoneTail}　📅 ${o.date}</div>
+                    <div class="order-card-meta">📱 ${phoneTail}　📅 ${o.date}${lineNameInfo}</div>
                 </div>
                 <span class="status-tag" style="color:${color};border:1px solid ${color};background:${color}1a;">${o.status}</span>
             </div>
@@ -1543,7 +1549,8 @@ function confirmCartReview() {
 
     setBtnState('submitBtn','訂單傳送中...',true);
     liff.getProfile().then(profile=>{
-        payload.userId = profile.userId;
+        payload.userId   = profile.userId;
+        payload.lineName = profile.displayName || '';
         postGasFireAndForget(payload);  // ★ 這裡才真正寫入 Google Sheet
         liff.closeWindow();
     }).catch((err)=>{
