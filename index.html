@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
-<head> 
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>祥和年菜預購</title>
@@ -569,8 +569,7 @@ select.date-locked {
             <div class="tot" id="summaryTotal"></div>
         </div>
         <div class="btn-split-row">
-            <button class="submit-btn green" id="posSubmitPrintBtn" onclick="submitPosOrder(true)">🖨️ 建立+印單據</button>
-            <button class="submit-btn gray" id="posSubmitBtn" onclick="submitPosOrder(false)">✅ 建立不印單據</button>
+            <button class="submit-btn green" id="posSubmitBtn" onclick="submitPosOrder()">✅ 建立訂單</button>
         </div>
     </div>
 </div>
@@ -1048,7 +1047,7 @@ function openPosModal() {
     setTimeout(refreshDateLock, 50);
 }
 
-function submitPosOrder(withPrint) {
+function submitPosOrder() {
     if (total <= 0) { alert('餐點數量全為 0，請先選擇餐點！'); return; }
     // 老闆模式：確認已選取貨門市
     if (!POS_BRANCH_FILTER) {
@@ -1072,12 +1071,10 @@ function submitPosOrder(withPrint) {
 
     const spiceNote = qty[6] > 0 ? `清蒸臭豆腐：${stinkTofuSpice}` : '';
 
-    const _sbtn1 = document.getElementById('posSubmitPrintBtn');
-    const _sbtn2 = document.getElementById('posSubmitBtn');
-    if(_sbtn1) _sbtn1.disabled = true;
-    if(_sbtn2) _sbtn2.disabled = true;
+    const _sbtn = document.getElementById('posSubmitBtn');
+    if (_sbtn) _sbtn.disabled = true;
     setBtnState('posSubmitBtn', '建立中...', true);
-    
+
     postGasFireAndForget({
         userId: 'POS_STORE',
         action: 'new',
@@ -1093,32 +1090,15 @@ function submitPosOrder(withPrint) {
         payStatus: payStatus,
         depositAmount: depAmt,
         spiceNote: spiceNote,
-        smsNotify: true,
-        skipPrint: !withPrint   // ★ false=印, true=不印
+        smsNotify: true
     });
 
-    // 【內網列印】POS 送出訂單後順便列印一張單據給客人
-    //   注意:orderId 是後端產生的,前端無法立刻知道,所以用「臨時 ID = 0」標示
-    //         若需要精準 orderId,需改 postGasFireAndForget 回傳(現在是 fire-and-forget)
-    //         先用「店內待印 - 編號未產生」的方式,讓店員看到單據主體即可
-    const printOrder = {
-        orderId: '---',  // 後端產生中,先用佔位
-        name, phone, branch: '鎮江店', date, time,
-        total, status: payStatus, deposit: depAmt, paid: 0,
-        items: qty.slice(),  // 拷貝一份
-        spiceNote
-    };
-    // v17:訂單建立後 GAS 後端已自動加入 CloudPRNT 佇列，印表機 30-60 秒內自動列印
-    // LAN 直連在 iPad Safari 無法使用，不再嘗試（避免彈出無意義的失敗 alert）
-    console.log('[POS] 訂單已送出，CloudPRNT 將自動列印，orderId 由後端產生。');
-
+    // 【修12】訂單建立不會再自動觸發列印。要印單據請到「訂單管理」列表，
+    // 對這筆訂單按「🖨️ 列印」，或用「🖨️ 列印全部訂單」一次印多筆。
     closeModal('posModal');
     resetPosForm();
-    setBtnState('posSubmitBtn', '✅ 建立不印單據', false);
-    const _rb1 = document.getElementById('posSubmitPrintBtn');
-    const _rb2 = document.getElementById('posSubmitBtn');
-    if(_rb1) { _rb1.disabled = false; _rb1.innerText = '🖨️ 建立+印單據'; }
-    if(_rb2) { _rb2.disabled = false; }
+    setBtnState('posSubmitBtn', '✅ 建立訂單', false);
+    if (_sbtn) _sbtn.disabled = false;
 }
 
 // ══════════════════════════════════════════════════════════
