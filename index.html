@@ -823,7 +823,8 @@ function checkDateConstraints(selectedDate) {
 
 function loadWithHistory(attempt) {
     attempt = attempt || 1;
-    const MAX_ATTEMPTS = 2;   // 第1次逾時→自動重試第2次(GAS可能剛好冷啟動)
+    const MAX_ATTEMPTS = 3;   // 【修28】從2次增加到3次嘗試——GAS本身很快(執行紀錄顯示都在2.5秒內完成)，
+                               // 逾時通常是手機端網路傳輸不穩造成的短暫狀況，多一次機會較容易自動成功
     const TIMEOUT_MS   = 15000;
     const profile = liff.getDecodedIDToken();
 
@@ -849,7 +850,7 @@ function loadWithHistory(attempt) {
             clearTimeout(tid);
             const isTimeout = e.name === 'AbortError';
             if (isTimeout && attempt < MAX_ATTEMPTS) {
-                document.getElementById('loading').innerText = 'GAS 冷啟動中，自動重試...';
+                document.getElementById('loading').innerText = '網路連線不穩，自動重試中...';
                 setTimeout(() => loadWithHistory(attempt + 1), 500);
                 return;
             }
