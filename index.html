@@ -652,12 +652,9 @@ function checkGasDeployment() {
         .catch(err => console.warn('GAS diag failed. Check GAS_URL/deployment.', err));
 }
 
-/* 【修改5】清蒸臭豆腐 index=6；【修改6】新增松露蘿蔔糕 index=21
-   ※ 索引對應 Google Sheet 欄位：
-     index 0-15  → H-W 欄（共16格）
-     index 16-20 → Y-AC 欄（共5格，松露油飯~酥香蘿蔔糕）
-     index 21    → X 欄（原空白，現改為「松露蘿蔔糕」）
-   請記得在 Sheet 第1列把 X 欄標題改為「松露蘿蔔糕」         */
+/* 【修改5】清蒸臭豆腐 index=6；【修29】松露蘿蔔糕(index=21)欄位已搬到Sheet最後(AC)，
+   跟這裡的menuItems順序完全對齊，index 0-21 → Sheet H-AC 欄，1:1直接對應，
+   不再需要任何轉換。 */
 const menuItems = [
     // 【修1】lactoOvo: true 表「奶蛋素」(其他預設純素)
     {name:"祥和拼盤",  price:800,  lactoOvo:true },  // 0
@@ -864,12 +861,10 @@ function startEdit(isEdit) {
     document.getElementById('choiceModal').style.display = 'none';
     if (isEdit) {
         action = 'update';
-        const h = lastOrder.items; // 長度 22：h[0..15]=H-W, h[16]=X(松露蘿蔔糕), h[17..21]=Y-AC
-        // 【修改6】重新對應 qty 陣列順序（menuItems 順序）
-        // qty[0..15]  ← h[0..15]
-        // qty[16..20] ← h[17..21]（Y-AC = 松露油飯~酥香蘿蔔糕）
-        // qty[21]     ← h[16]    （X 欄 = 松露蘿蔔糕）
-        qty = h.slice(0,16).concat(h.slice(17,22)).concat([Number(h[16])||0]).map(v=>parseInt(v)||0);
+        // 【修29】松露蘿蔔糕欄位已搬到Sheet最後(AC)，跟前端menuItems順序對齊，
+        // 不再需要重新排序，items跟qty是1:1直接對應。
+        const h = lastOrder.items;
+        qty = h.map(v=>parseInt(v)||0);
         // 【修 1】從 lastOrder.spiceNote 解析臭豆腐辣度(原本一律預設「不辣」是 bug)
         const oldSpice0 = String(lastOrder.spiceNote || '');
         const spiceMatch0 = oldSpice0.match(/清蒸臭豆腐[：:]\s*([^\n,，]+)/);
@@ -1349,15 +1344,13 @@ function doEditOrder(order) {
     isEditMode = true;
     closeModal('searchModal');
 
-    const items = order.items; // 22 個元素：items[0..15]=H-W, items[16]=X欄(松露蘿蔔糕), items[17..21]=Y-AC
+    // 【修29】松露蘿蔔糕欄位已搬到Sheet最後(AC)，跟前端menuItems順序對齊，
+    // 不再需要重新排序，items跟qty是1:1直接對應。
+    const items = order.items;
     const oldSpice = String(order.spiceNote || '');
     const spiceMatch = oldSpice.match(/清蒸臭豆腐[：:]\s*([^\n,，]+)/);
     stinkTofuSpice = spiceMatch ? spiceMatch[1].trim() : '不辣';
-    // 【修改6】對應回 menuItems 順序（qty[21] = 松露蘿蔔糕 = items[16]）
-    qty = items.slice(0,16)
-               .concat(items.slice(17,22))
-               .concat([Number(items[16])||0])
-               .map(v=>parseInt(v)||0);
+    qty = items.map(v=>parseInt(v)||0);
     renderMenu();
 
     document.getElementById('editBanner').style.display='block';
