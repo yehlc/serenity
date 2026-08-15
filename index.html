@@ -1767,6 +1767,12 @@ function handlePrintOrder(orderJson) {
     try { order = (typeof orderJson === 'string') ? JSON.parse(orderJson) : orderJson; }
     catch(e) { alert('訂單資料解析失敗:' + e); return; }
 
+    // 【修38】已取消的訂單品項已經被清空(0元/無品項)，跟「列印全部訂單」
+    // 排除已取消的邏輯保持一致，這裡改成先確認，避免不小心印出空白收據。
+    if (order.status === '已取消') {
+        if (!confirm('這筆訂單已經是「已取消」狀態，品項已清空，列印出來會是空白收據。確定還是要列印嗎？')) return;
+    }
+
     const btn = document.querySelector(`button[data-print-btn="${order.orderId}"]`);
     if (btn) { btn.innerText = '✅ 排入!'; btn.style.background = '#4caf50'; btn.style.color = '#fff'; }
     setTimeout(() => {
