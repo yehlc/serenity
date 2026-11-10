@@ -48,6 +48,8 @@
         .close-btn{font-size:1.5em;color:#999;cursor:pointer;border:none;background:none;}
         .form-group{margin-bottom:15px;}
         .form-group label{display:block;font-weight:bold;margin-bottom:5px;color:#555;}
+        /* 【修41】姓名欄位提示：請輸入完整全名 */
+        .name-hint{color:#d32f2f;font-weight:normal;font-size:.9em;margin-left:2px;}
         .form-group input,.form-group select{width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;font-size:1em;}
         .submit-btn{width:100%;padding:15px;background:#8b0000;color:#fff;border:none;border-radius:8px;font-size:1.2em;font-weight:bold;margin-top:10px;cursor:pointer;}
         .submit-btn:disabled{background:#ccc;cursor:not-allowed;}
@@ -446,8 +448,8 @@ select.date-locked {
             </select>
         </div>
         <div class="form-group">
-            <label>顧客姓名</label>
-            <input type="text" id="editCustName" placeholder="顧客姓名" required>
+            <label>顧客姓名<span class="name-hint">（請輸入完整全名）</span></label>
+            <input type="text" id="editCustName" placeholder="請輸入完整全名" required>
         </div>
         <div class="form-group">
             <label>連絡電話</label>
@@ -519,8 +521,8 @@ select.date-locked {
             </select>
         </div>
         <div class="form-group">
-            <label>訂購人姓名</label>
-            <input type="text" id="custName" placeholder="請填寫真實姓名" required>
+            <label>訂購人姓名<span class="name-hint">（請輸入完整全名）</span></label>
+            <input type="text" id="custName" placeholder="請輸入完整全名" required>
         </div>
         <div class="form-group">
             <label>連絡電話</label>
@@ -563,8 +565,8 @@ select.date-locked {
             </select>
         </div>
         <div class="form-group">
-            <label>顧客姓名</label>
-            <input type="text" id="posCustName" placeholder="顧客姓名" required>
+            <label>顧客姓名<span class="name-hint">（請輸入完整全名）</span></label>
+            <input type="text" id="posCustName" placeholder="請輸入完整全名" required>
         </div>
         <div class="form-group">
             <label>連絡電話</label>
