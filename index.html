@@ -398,8 +398,10 @@ select.date-locked {
     <div class="modal-content">
         <div class="modal-header">
             <h3>📋 訂單管理<span id="branchBadge" style="margin-left:8px;font-size:.7em;padding:2px 8px;border-radius:12px;background:#e3f2fd;color:#1565c0;"></span></h3>
-            <div style="display:flex;gap:8px;align-items:center;">
-                <button onclick="printAllOrders()" id="printAllBtn" style="font-size:.75em;padding:4px 10px;background:#1565c0;color:#fff;border:none;border-radius:6px;cursor:pointer;">🖨️ 列印全部訂單</button>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+                <!-- 【修40】依取貨日拆成兩顆按鈕：除夕前一天 / 除夕 -->
+                <button onclick="printAllOrders('2027-02-04')" id="printBtn_20270204" class="print-day-btn" style="font-size:.75em;padding:4px 10px;background:#1565c0;color:#fff;border:none;border-radius:6px;cursor:pointer;">🖨️ 列印除夕前一天(2/4)</button>
+                <button onclick="printAllOrders('2027-02-05')" id="printBtn_20270205" class="print-day-btn" style="font-size:.75em;padding:4px 10px;background:#c62828;color:#fff;border:none;border-radius:6px;cursor:pointer;">🖨️ 列印除夕(2/5)</button>
                 
                 <button class="close-btn" onclick="closeModal('searchModal')">×</button>
             </div>
@@ -444,8 +446,8 @@ select.date-locked {
             </select>
         </div>
         <div class="form-group">
-            <label>顧客姓名(請輸入完整全名)</label>
-            <input type="text" id="editCustName" placeholder="顧客姓名(請輸入完整全名)" required>
+            <label>顧客姓名</label>
+            <input type="text" id="editCustName" placeholder="顧客姓名" required>
         </div>
         <div class="form-group">
             <label>連絡電話</label>
@@ -517,8 +519,8 @@ select.date-locked {
             </select>
         </div>
         <div class="form-group">
-            <label>訂購人姓名（請輸入完整全名）</label>
-            <input type="text" id="custName" placeholder="請填寫真實姓名（請輸入完整全名）" required>
+            <label>訂購人姓名</label>
+            <input type="text" id="custName" placeholder="請填寫真實姓名" required>
         </div>
         <div class="form-group">
             <label>連絡電話</label>
@@ -561,8 +563,8 @@ select.date-locked {
             </select>
         </div>
         <div class="form-group">
-            <label>顧客姓名(請輸入完整全名)</label>
-            <input type="text" id="posCustName" placeholder="顧客姓名(請輸入完整全名)" required>
+            <label>顧客姓名</label>
+            <input type="text" id="posCustName" placeholder="顧客姓名" required>
         </div>
         <div class="form-group">
             <label>連絡電話</label>
@@ -1900,51 +1902,63 @@ function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/'/g,"&#39;")
 // ══════════════════════════════════════════════════════════
 //  一鍵列印全部訂單：同時批次送出，大幅加速
 // ══════════════════════════════════════════════════════════
-async function printAllOrders() {
-    const btn      = document.getElementById('printAllBtn');
-    const statusEl = document.getElementById('searchStatus');
+// 【修40】依取貨日列印：除夕前一天(2/4) / 除夕(2/5) 分開兩顆按鈕
+const PRINT_DAY_LABEL = {
+    '2027-02-04': '除夕前一天(2/4)',
+    '2027-02-05': '除夕(2/5)'
+};
 
-    // allOrders 已按門市預先篩選，直接過濾狀態即可
+async function printAllOrders(pickupDate) {
+    const dayLabel = PRINT_DAY_LABEL[pickupDate];
+    if (!dayLabel) { alert('未指定取貨日期，無法列印'); return; }
+
+    const btn      = document.getElementById('printBtn_' + pickupDate.replace(/-/g, ''));
+    const allBtns  = document.querySelectorAll('.print-day-btn');
+    const statusEl = document.getElementById('searchStatus');
+    const btnText  = btn.innerText;
+
+    // allOrders 已按門市預先篩選；排除隱藏/已取消，且只取這一天取貨的訂單
     const printable = allOrders
         .filter(o => o.status !== '隱藏' && o.status !== '已隱藏' && o.status !== '已取消')
+        .filter(o => String(o.date || '').trim() === pickupDate)
         .sort((a, b) => {
             // ★ 排序規則：鎮江店(J) 優先，慶城店(Q) 其次，各自由小到大
             const aId = String(a.orderId || '');
             const bId = String(b.orderId || '');
             const aJ  = aId.startsWith('J') ? 0 : 1;
             const bJ  = bId.startsWith('J') ? 0 : 1;
-            if (aJ !== bJ) return aJ - bJ;            // J 排 Q 前
-            // 同前綴：依數字大小升冪
+            if (aJ !== bJ) return aJ - bJ;
             const aNum = parseInt(aId.replace(/\D/g, ''), 10) || 0;
             const bNum = parseInt(bId.replace(/\D/g, ''), 10) || 0;
             return aNum - bNum;
         });
 
-    if (printable.length === 0) { alert('沒有可列印的訂單'); return; }
-    const label = POS_BRANCH_FILTER || '全部';
-    if (!confirm(`確定要列印「${label}」訂單，共 ${printable.length} 筆？\n所有佇列將同時送出（約 3 秒完成），印表機陸續印出。`)) return;
+    const branchLabel = POS_BRANCH_FILTER || '全部';
+    if (printable.length === 0) { alert(`「${branchLabel}」${dayLabel}沒有可列印的訂單`); return; }
+    if (!confirm(`確定要列印「${branchLabel}」${dayLabel}取貨的訂單，共 ${printable.length} 筆？\n（已取消的訂單不會列印）\n印表機會依訂單編號陸續印出。`)) return;
 
-    btn.disabled = true;
-    statusEl.innerText = `正在依序加入列印佇列（共 ${printable.length} 筆）...`;
+    // 執行期間兩顆按鈕都先停用，避免同時按到另一天造成佇列順序混在一起
+    allBtns.forEach(b => b.disabled = true);
+    statusEl.innerText = `正在依序加入列印佇列：${dayLabel}（共 ${printable.length} 筆）...`;
 
     // ★ 循序送出（間隔 300ms）：確保 PRINT_QUEUE 中順序正確
-    //   J-001 → J-002 → ... → Q-001 → Q-002 → ...
     let ok = 0, fail = 0;
-    for (let i = 0; i < printable.length; i++) {
-        const o = printable[i];
-        btn.innerText = `⏳ ${i+1}/${printable.length}：${o.orderId}`;
-        try {
-            const r = await fetch(WORKER_API_URL + 'posReprint=' + encodeURIComponent(o.orderId) + '&_=' + Date.now());
-            const d = await r.json();
-            if (d.ok) ok++; else { fail++; console.warn('[printAll]', o.orderId, d.message); }
-        } catch(e) { fail++; console.error('[printAll]', o.orderId, e); }
-        // 300ms 間隔確保 GAS 按順序寫入 PRINT_QUEUE
-        if (i < printable.length - 1) await new Promise(r => setTimeout(r, 300));
+    try {
+        for (let i = 0; i < printable.length; i++) {
+            const o = printable[i];
+            btn.innerText = `⏳ ${i+1}/${printable.length}：${o.orderId}`;
+            try {
+                const r = await fetch(WORKER_API_URL + 'posReprint=' + encodeURIComponent(o.orderId) + '&_=' + Date.now());
+                const d = await r.json();
+                if (d.ok) ok++; else { fail++; console.warn('[printAll]', o.orderId, d.message); }
+            } catch(e) { fail++; console.error('[printAll]', o.orderId, e); }
+            if (i < printable.length - 1) await new Promise(r => setTimeout(r, 300));
+        }
+    } finally {
+        allBtns.forEach(b => b.disabled = false);
+        btn.innerText = btnText;
     }
-
-    btn.disabled = false;
-    btn.innerText = '🖨️ 列印全部訂單';
-    statusEl.innerText = `✅ ${ok} 筆已加入佇列${fail > 0 ? `，${fail} 筆失敗` : ''}，印表機 15-30 秒內陸續印出`;
+    statusEl.innerText = `✅ ${dayLabel}：${ok} 筆已加入佇列${fail > 0 ? `，${fail} 筆失敗` : ''}，印表機 15-30 秒內陸續印出`;
 }
 
 </script>
